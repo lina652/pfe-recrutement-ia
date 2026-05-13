@@ -1,0 +1,71 @@
+# ============================================
+# CORE DEPENDENCIES (already installed ✅)
+# ============================================
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+pydantic[email]
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+alembic
+python-dotenv
+python-multipart
+
+# ============================================
+# CV PROCESSING & NER
+# ============================================
+paddlepaddle
+paddleocr
+pymupdf
+pillow
+groq
+sentence-transformers
+numpy
+pgvector
+
+# ============================================
+# INTERVIEW BOT (NEW)
+# ============================================
+# Speech-to-Text
+openai
+
+# Text-to-Speech
+edge-tts
+
+# Audio/Video Processing
+pydub
+moviepy
+opencv-python-headless
+
+# Emotion Detection
+deepface
+tensorflow
+tf-keras
+
+# System utilities
+ffmpeg-python
+
+# ============================================
+# RAG CHATBOT (NEW)
+# ============================================
+langchain==1.2.15
+langchain-community==0.4.1
+langchain-chroma==1.1.0
+langchain-groq==1.1.2
+langchain-huggingface==1.2.2
+chromadb==1.5.8
+langsmith==0.2.6
+
+# ============================================
+# LANGGRAPH ORCHESTRATION
+# ============================================
+langgraph>=0.2.0
+langchain-core>=0.3.0
+
+# ============================================
+# ASYNC TASK PROCESSING
+# ============================================
+celery[redis]
