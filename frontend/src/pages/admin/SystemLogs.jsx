@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import AdminLayout from "../../components/admin/AdminLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
 import { getLogs } from "../../api/authApi"
 
 const ACTION_COLORS = {
@@ -38,10 +39,12 @@ export default function SystemLogs() {
 
   return (
     <AdminLayout>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">System Logs</h1>
-        <p className="text-gray-500 mt-1">{total} total actions recorded</p>
-      </div>
+      <PageHeader
+        eyebrow={PAGE_EYEBROWS.admin}
+        title="System Logs"
+        count={total}
+        countLabel="actions recorded"
+      />
 
       {/* Search */}
       <div className="mb-6">
@@ -60,9 +63,9 @@ export default function SystemLogs() {
           <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"/>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="page-glass overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="page-glass-thead border-b border-white/40">
               <tr>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Action</th>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Performed By</th>
@@ -71,7 +74,7 @@ export default function SystemLogs() {
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Timestamp</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-white/30">
               {logs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="text-center py-12 text-gray-400">
@@ -80,7 +83,7 @@ export default function SystemLogs() {
                 </tr>
               ) : (
                 logs.map((log) => (
-                  <tr key={log.log_id} className="hover:bg-gray-50">
+                  <tr key={log.log_id} className="hover:bg-white/25">
                     <td className="px-6 py-4">
                       <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
                         ACTION_COLORS[log.action] || "bg-gray-100 text-gray-700"

@@ -1,22 +1,29 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import CandidateLayout from "../../components/candidate/CandidateLayout"
 import { getMyApplications } from "../../api/authApi"
+import {
+  dashboardGlassClass,
+  DashboardOverviewHero,
+  DetailLink,
+  MiniDonut,
+  pct,
+} from "../../components/shared/DashboardOverviewKit"
 
 const STATUS_COLORS = {
-  PENDING:      "bg-amber-500/20 text-amber-500 border border-amber-500/30",
-  UNDER_REVIEW: "bg-blue-500/20 text-blue-500 border border-blue-500/30",
-  SHORTLISTED:  "bg-purple-500/20 text-purple-500 border border-purple-500/30",
-  REJECTED:     "bg-red-500/20 text-red-500 border border-red-500/30",
-  ACCEPTED:     "bg-emerald-500/20 text-emerald-500 border border-emerald-500/30",
+  PENDING: "bg-amber-500/20 text-amber-700 border border-amber-500/30",
+  UNDER_REVIEW: "bg-blue-500/20 text-blue-700 border border-blue-500/30",
+  SHORTLISTED: "bg-purple-500/20 text-purple-700 border border-purple-500/30",
+  REJECTED: "bg-red-500/20 text-red-700 border border-red-500/30",
+  ACCEPTED: "bg-emerald-500/20 text-emerald-700 border border-emerald-500/30",
 }
 
 const STATUS_ICONS = {
-  PENDING:      "⏳",
+  PENDING: "⏳",
   UNDER_REVIEW: "🔍",
-  SHORTLISTED:  "⭐",
-  REJECTED:     "❌",
-  ACCEPTED:     "🎉",
+  SHORTLISTED: "⭐",
+  REJECTED: "❌",
+  ACCEPTED: "🎉",
 }
 
 export default function CandidateDashboard() {
@@ -31,109 +38,209 @@ export default function CandidateDashboard() {
       .finally(() => setLoading(false))
   }, [])
 
-  const pending = applications.filter((a) => a.status === "PENDING").length
-  const shortlisted = applications.filter((a) => a.status === "SHORTLISTED").length
-  const accepted = applications.filter((a) => a.status === "ACCEPTED").length
+  const counts = useMemo(() => {
+    const total = applications.length
+    const pending = applications.filter((a) => a.status === "PENDING").length
+    const underReview = applications.filter((a) => a.status === "UNDER_REVIEW").length
+    const shortlisted = applications.filter((a) => a.status === "SHORTLISTED").length
+    const accepted = applications.filter((a) => a.status === "ACCEPTED").length
+    const rejected = applications.filter((a) => a.status === "REJECTED").length
+    return { total, pending, underReview, shortlisted, accepted, rejected }
+  }, [applications])
+
+  const shortlistRate = pct(counts.shortlisted, counts.total)
+  const acceptedRate = pct(counts.accepted, counts.total)
+  const glass = dashboardGlassClass
 
   return (
     <CandidateLayout title="Overview">
-      <div className="mb-10 p-8 rounded-3xl bg-gradient-to-br from-blue-900 to-indigo-900 text-white shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
-        <div className="relative z-10">
-          <h1 className="text-4xl font-extrabold tracking-tight mb-2">Welcome back! 👋</h1>
-          <p className="text-blue-200 text-lg">Here's what's happening with your job applications today.</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-        <div className="bg-white/60 backdrop-blur-xl border border-gray-100 rounded-3xl p-6 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-gray-500 font-semibold uppercase tracking-wider text-xs">Pending</h3>
-            <span className="p-2 bg-amber-100 rounded-xl text-amber-600">⏳</span>
-          </div>
-          <p className="text-5xl font-black text-gray-800">{pending}</p>
-        </div>
-        
-        <div className="bg-white/60 backdrop-blur-xl border border-gray-100 rounded-3xl p-6 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-gray-500 font-semibold uppercase tracking-wider text-xs">Shortlisted</h3>
-            <span className="p-2 bg-purple-100 rounded-xl text-purple-600">⭐</span>
-          </div>
-          <p className="text-5xl font-black text-gray-800">{shortlisted}</p>
-        </div>
-        
-        <div className="bg-white/60 backdrop-blur-xl border border-gray-100 rounded-3xl p-6 shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-gray-500 font-semibold uppercase tracking-wider text-xs">Accepted</h3>
-            <span className="p-2 bg-emerald-100 rounded-xl text-emerald-600">🎉</span>
-          </div>
-          <p className="text-5xl font-black text-gray-800">{accepted}</p>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Recent Applications</h2>
-        <span className="bg-blue-100 text-blue-700 py-1 px-3 rounded-full text-sm font-bold">{applications.length} total</span>
-      </div>
+      <DashboardOverviewHero
+        title="Your applications"
+        subtitle="Track where each application stands and what to do next."
+      />
 
       {loading ? (
-        <div className="flex justify-center mt-20">
-          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"/>
-        </div>
-      ) : applications.length === 0 ? (
-        <div className="bg-white/60 backdrop-blur-xl rounded-3xl border border-gray-100 p-16 text-center shadow-lg">
-          <div className="text-6xl mb-6">📝</div>
-          <h3 className="text-xl font-bold text-gray-800 mb-2">No applications yet</h3>
-          <p className="text-gray-500 mb-8 max-w-sm mx-auto">You haven't applied to any jobs yet. Browse our open positions and find your next role.</p>
-          <button
-            onClick={() => navigate("/jobs")}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-3 rounded-xl text-sm font-bold hover:shadow-lg hover:from-blue-700 hover:to-indigo-700 transition-all"
-          >
-            Browse Jobs
-          </button>
+        <div className="mt-16 flex justify-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-600" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {applications.map((app) => (
-            <div key={app.app_id} className="bg-white/80 backdrop-blur-xl rounded-3xl border border-gray-100 p-6 shadow-lg hover:shadow-xl transition-all group">
-              <div className="flex items-start justify-between mb-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-xl shadow-sm border border-white">
-                    🏢
+        <>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <section className={glass}>
+              <div className="mb-4 flex items-start justify-between gap-2">
+                <h2 className="text-[15px] font-bold leading-snug text-green-900">Application volume</h2>
+                <DetailLink to="/candidate/applications" />
+              </div>
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-2 rounded-2xl bg-rose-50/90 px-3 py-2.5 ring-1 ring-rose-100/80">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />
+                    <span className="truncate text-sm font-semibold text-rose-900">Total applications</span>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-800 group-hover:text-blue-600 transition-colors">{app.job_title}</h3>
-                    <p className="text-sm font-medium text-gray-500">{app.company_name} {app.location && <span className="text-gray-400 font-normal"> • {app.location}</span>}</p>
+                  <span className="shrink-0 text-sm font-black text-rose-950">{counts.total}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 rounded-2xl bg-blue-50/90 px-3 py-2.5 ring-1 ring-blue-100/80">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500" />
+                    <span className="truncate text-sm font-semibold text-blue-950">Under review</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-sm font-black text-blue-950">{counts.underReview}</span>
+                    <DetailLink to="/candidate/applications" />
                   </div>
                 </div>
-                <div className="text-right flex flex-col items-end gap-2">
-                  <span className={`text-xs font-bold px-3 py-1.5 rounded-xl ${STATUS_COLORS[app.status]} flex items-center gap-1.5`}>
-                    {STATUS_ICONS[app.status]} {app.status.replace("_", " ")}
-                  </span>
-                  {app.final_score > 0 && (
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-gray-600 bg-gray-100 px-2 py-1 rounded-lg">
-                      🤖 Match: {(app.final_score * 100).toFixed(0)}%
-                    </div>
-                  )}
+                <div className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50/90 px-3 py-2.5 ring-1 ring-amber-100/80">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+                    <span className="truncate text-sm font-semibold text-amber-950">Pending</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-sm font-black text-amber-950">{counts.pending}</span>
+                    <DetailLink to="/candidate/applications" />
+                  </div>
                 </div>
               </div>
-              
-              {app.ai_recommendation && (
-                <div className="mb-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100/50 rounded-2xl p-4 text-sm text-gray-700 shadow-inner">
-                  <div className="flex gap-2">
-                    <span className="text-blue-500">💡</span>
-                    <p className="leading-relaxed text-blue-900/80 font-medium">{app.ai_recommendation}</p>
-                  </div>
+            </section>
+
+            <section className={glass}>
+              <h2 className="mb-1 text-[15px] font-bold text-green-900">Outcomes & mix</h2>
+              <p className="mb-4 text-xs font-medium text-slate-500">How your applications are distributed</p>
+              <div className="flex flex-col items-stretch gap-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col items-center rounded-2xl border border-white/60 bg-white/40 px-4 py-3 text-center sm:items-start sm:text-left">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total submitted</p>
+                  <p className="mt-1 text-3xl font-black tabular-nums text-slate-900 sm:text-4xl">{counts.total}</p>
+                  <p className="mt-1 text-[11px] font-medium text-emerald-700">Accepted {acceptedRate}% so far</p>
                 </div>
-              )}
-              
-              <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-xs font-medium text-gray-400">
-                <span>Applied {new Date(app.submission_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                <button className="text-blue-600 hover:text-blue-800 font-bold px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors">View Details →</button>
+                <div className="flex flex-1 flex-wrap items-end justify-center gap-6 sm:justify-end">
+                  <MiniDonut valuePct={shortlistRate} color="#6366f1" label="Shortlisted" sub="÷ all applications" />
+                  <MiniDonut valuePct={acceptedRate} color="#059669" label="Accepted" sub="÷ all applications" />
+                </div>
               </div>
+              <div className="mt-4 flex justify-end">
+                <DetailLink to="/jobs">Browse jobs</DetailLink>
+              </div>
+            </section>
+
+            <section className={glass}>
+              <div className="mb-4 flex items-start justify-between gap-2">
+                <h2 className="text-[15px] font-bold leading-snug text-green-900">Status breakdown</h2>
+                <DetailLink to="/candidate/applications" />
+              </div>
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50/90 px-3 py-2.5 ring-1 ring-amber-100/80">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+                    <span className="truncate text-sm font-semibold text-amber-950">Pending</span>
+                  </div>
+                  <span className="shrink-0 text-sm font-black text-amber-950">{counts.pending}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 rounded-2xl bg-violet-50/90 px-3 py-2.5 ring-1 ring-violet-100/80">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-violet-600" />
+                    <span className="truncate text-sm font-semibold text-violet-950">Shortlisted</span>
+                  </div>
+                  <span className="shrink-0 text-sm font-black text-violet-950">{counts.shortlisted}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 rounded-2xl bg-emerald-50/90 px-3 py-2.5 ring-1 ring-emerald-100/80">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-600" />
+                    <span className="truncate text-sm font-semibold text-emerald-900">Accepted</span>
+                  </div>
+                  <span className="shrink-0 text-sm font-black text-emerald-950">{counts.accepted}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 rounded-2xl bg-rose-50/90 px-3 py-2.5 ring-1 ring-rose-100/80">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />
+                    <span className="truncate text-sm font-semibold text-rose-900">Rejected</span>
+                  </div>
+                  <span className="shrink-0 text-sm font-black text-rose-950">{counts.rejected}</span>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div className="mt-10">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-bold text-green-900 sm:text-xl">Recent applications</h2>
+              <span className="rounded-full border border-slate-200/80 bg-white/70 px-3 py-1 text-xs font-bold text-slate-700 shadow-sm">
+                {counts.total} total
+              </span>
             </div>
-          ))}
-        </div>
+
+            {applications.length === 0 ? (
+              <section className={`${glass} p-10 text-center sm:p-14`}>
+                <div className="mb-4 text-5xl">📝</div>
+                <h3 className="text-lg font-bold text-slate-900">No applications yet</h3>
+                <p className="mx-auto mt-2 max-w-md text-sm font-medium text-slate-600">
+                  Browse open roles and send your first application to see it here.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/jobs")}
+                  className="mt-6 rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-slate-800"
+                >
+                  Browse jobs
+                </button>
+              </section>
+            ) : (
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+                {applications.map((app) => (
+                  <section key={app.app_id} className={`${glass} transition hover:border-white/80`}>
+                    <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-200/80 bg-white/80 text-xl shadow-sm">
+                          🏢
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-slate-900">{app.job_title}</h3>
+                          <p className="text-sm font-medium text-slate-600">
+                            {app.company_name}
+                            {app.location && <span className="text-slate-400"> • {app.location}</span>}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <span
+                          className={`flex items-center gap-1.5 rounded-xl px-3 py-1 text-xs font-bold ${STATUS_COLORS[app.status] || "bg-slate-100 text-slate-700"}`}
+                        >
+                          {STATUS_ICONS[app.status]} {app.status?.replace("_", " ")}
+                        </span>
+                        {app.final_score > 0 && (
+                          <span className="rounded-lg border border-slate-200/80 bg-white/80 px-2 py-1 text-xs font-bold text-slate-700">
+                            Match {(app.final_score * 100).toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {app.ai_recommendation && (
+                      <div className="mb-4 rounded-2xl border border-blue-100/80 bg-blue-50/60 p-4 text-sm text-slate-800">
+                        <span className="mr-2 text-blue-500">💡</span>
+                        {app.ai_recommendation}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/60 pt-4 text-xs font-medium text-slate-500">
+                      <span>
+                        Applied{" "}
+                        {new Date(app.submission_date).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => navigate("/candidate/applications")}
+                        className="font-bold text-green-900 underline-offset-2 hover:underline"
+                      >
+                        View details →
+                      </button>
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       )}
     </CandidateLayout>
   )

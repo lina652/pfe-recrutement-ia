@@ -1,93 +1,85 @@
 import { NavLink, useNavigate } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
+import { dashboardGlassSidebarClass, sidebarGlassNavClass } from "../shared/dashboardSidebarShell"
+import { DashboardNavIcon } from "../shared/DashboardNavIcons"
 
 const links = [
-  { to: "/admin/dashboard",        label: "Dashboard",       icon: "📊" },
-  { to: "/admin/users",            label: "User Management", icon: "👥" },
-  { to: "/admin/invite",           label: "Invite Staff",    icon: "✉️"  },
-  { to: "/admin/logs",             label: "System Logs",     icon: "📋" },
-  { to: "/admin/reports",          label: "Reports",         icon: "📄" },
-  { to: "/admin/profile",          label: "Edit Profile",    icon: "✏️" },
+  { to: "/admin/dashboard", label: "Dashboard", icon: "dashboard" },
+  { to: "/admin/users", label: "User Management", icon: "users" },
+  { to: "/admin/invite", label: "Invite Staff", icon: "mail" },
+  { to: "/admin/logs", label: "System Logs", icon: "clipboardList" },
+  { to: "/admin/reports", label: "Reports", icon: "documentText" },
+  { to: "/admin/profile", label: "Edit Profile", icon: "pencil" },
 ]
 
-export default function AdminSidebar() {
-  const { user, logout } = useAuth()
+export default function AdminSidebar({ open = false, onClose }) {
+  const { user } = useAuth()
   const navigate = useNavigate()
 
   const avatar = user?.avatar_url
   const initials = `${user?.first_name?.[0] || ""}${user?.last_name?.[0] || ""}`
 
   return (
-    <aside className="w-64 min-h-screen bg-blue-900 text-white flex flex-col">
-
-      {/* Logo — click goes home */}
-      <div className="p-6 border-b border-blue-800">
-        <h1
-          onClick={() => navigate("/")}
-          style={{ fontFamily:"'Monotype Corsiva','Apple Chancery',cursive", fontSize:"24px", color:"white", marginBottom:"12px", cursor:"pointer" }}
-        >
-          Talent<span style={{ color:"#f97316" }}>Os</span>
-        </h1>
-        <p className="text-sm font-bold text-blue-100">{user?.company_name || "Admin Panel"}</p>
-      </div>
-
-      {/* User info — click goes to edit profile */}
+    <aside className={dashboardGlassSidebarClass(open)} aria-hidden={!open}>
       <div
-        className="p-4 border-b border-blue-800 cursor-pointer hover:bg-blue-800 transition"
-        onClick={() => navigate("/admin/profile")}
+        className="cursor-pointer border-b border-white/30 px-5 py-4 transition hover:bg-white/20"
+        onClick={() => {
+          navigate("/admin/profile")
+          onClose?.()
+        }}
       >
         <div className="flex items-center gap-3">
           <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white ring-2 ring-white/60"
             style={{
-              width: 36, height: 36, borderRadius: "50%",
-              overflow: "hidden", flexShrink: 0,
-              background: avatar ? "transparent" : "#2563eb",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontWeight: 700, fontSize: 13
+              background: avatar ? "transparent" : "linear-gradient(135deg,#2563eb,#1d4ed8)",
             }}
           >
             {avatar ? (
-              <img src={avatar} alt="Avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img src={avatar} alt="" className="h-full w-full object-cover" />
             ) : (
               initials
             )}
           </div>
-          <div>
-            <p className="text-sm font-medium">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-900">
               {user?.first_name} {user?.last_name}
             </p>
-            <p className="text-xs text-blue-300">Administrator</p>
+            <p className="text-xs font-medium text-emerald-900/70">Administrator</p>
+            {user?.company_name && (
+              <p className="mt-1 truncate text-xs font-semibold text-emerald-900/85" title={user.company_name}>
+                {user.company_name}
+              </p>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-3">
         {links.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition ${
-                isActive
-                  ? "bg-blue-700 text-white"
-                  : "text-blue-200 hover:bg-blue-800 hover:text-white"
-              }`
-            }
+            end={link.to === "/admin/dashboard"}
+            onClick={() => onClose?.()}
+            className={({ isActive }) => sidebarGlassNavClass(isActive)}
           >
-            <span>{link.icon}</span>
-            <span>{link.label}</span>
+            <DashboardNavIcon name={link.icon} className="h-5 w-5 shrink-0 opacity-90" />
+            <span className="flex-1 truncate">{link.label}</span>
           </NavLink>
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-blue-800">
-        <div className="px-4 py-2 text-xs text-blue-400 text-center">
-          TalentOs © 2026
-        </div>
+      <div className="border-t border-white/30 px-4 pt-3">
+        <button
+          type="button"
+          onClick={() => onClose?.()}
+          className="mb-2 w-full rounded-2xl border border-white/40 bg-white/30 py-2.5 text-sm font-semibold text-slate-800 backdrop-blur-sm transition hover:bg-white/45"
+        >
+          Fermer le menu
+        </button>
+        <p className="text-center text-[10px] font-medium text-emerald-900/60">TalentOs © 2026</p>
       </div>
-
     </aside>
   )
 }

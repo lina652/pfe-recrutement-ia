@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
 import CandidateLayout from "../../components/candidate/CandidateLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
 import { getCandidateInterviews, getInterviewScores, respondToCandidateInterview, getInterviewTimeSlots, selectInterviewTimeSlot } from "../../api/authApi"
 import Toast from "../../components/Toast"
 
@@ -161,14 +162,15 @@ export default function CandidateInterviews() {
 
   return (
     <CandidateLayout>
-      <div className="p-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">My Interviews</h1>
-        <p className="text-gray-600 mb-8">
-          View your interview invitations and results
-        </p>
+      <div>
+        <PageHeader
+          eyebrow={PAGE_EYEBROWS.candidate}
+          title="My Interviews"
+          subtitle="View your interview invitations and results"
+        />
 
         {interviews.length === 0 ? (
-          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className="page-glass p-12 text-center">
             <div className="text-6xl mb-4">📝</div>
             <p className="text-gray-500 font-semibold">No interviews yet</p>
             <p className="text-gray-400 text-sm mt-2">
@@ -178,7 +180,7 @@ export default function CandidateInterviews() {
         ) : (
           <div className="grid gap-6">
             {interviews.map((interview) => (
-              <div key={interview.interview_id} className="bg-white rounded-lg shadow border border-gray-200 p-6">
+              <div key={interview.interview_id} className="page-glass p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h3 className="text-xl font-bold text-gray-800">
@@ -194,19 +196,19 @@ export default function CandidateInterviews() {
                 </div>
 
                 <div className="grid grid-cols-3 gap-4 mb-6">
-                  <div className="bg-gray-50 p-3 rounded">
+                  <div className="page-glass-inset p-3 rounded-xl">
                     <p className="text-xs text-gray-600 font-semibold">Language</p>
                     <p className="text-lg font-bold text-gray-800 mt-1">
                       {interview.language === "en" ? "🇬🇧 English" : "🇫🇷 Français"}
                     </p>
                   </div>
-                  <div className="bg-gray-50 p-3 rounded">
+                  <div className="page-glass-inset p-3 rounded-xl">
                     <p className="text-xs text-gray-600 font-semibold">Phase</p>
                     <p className="text-lg font-bold text-gray-800 mt-1 capitalize">
                       {interview.phase}
                     </p>
                   </div>
-                  <div className="bg-gray-50 p-3 rounded">
+                  <div className="page-glass-inset p-3 rounded-xl">
                     <p className="text-xs text-gray-600 font-semibold">Turns</p>
                     <p className="text-lg font-bold text-gray-800 mt-1">
                       {interview.turn_count || 0}
@@ -228,7 +230,7 @@ export default function CandidateInterviews() {
                 )}
 
                 {interview.candidate_response_reason && (
-                  <div className="mb-4 bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-700 whitespace-pre-line">
+                  <div className="mb-4 page-glass-inset rounded-xl p-3 text-sm text-gray-700 whitespace-pre-line">
                     <span className="font-semibold">Your message:</span> {interview.candidate_response_reason}
                   </div>
                 )}
@@ -358,7 +360,7 @@ export default function CandidateInterviews() {
       {/* Time Slot Selection Modal */}
       {showTimeSlotModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
+          <div className="page-glass shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
             {/* Header */}
             <div className="bg-gradient-to-r from-purple-600 to-purple-700 p-6 text-white">
               <h2 className="text-2xl font-bold">📅 Select Your Interview Time</h2>
@@ -423,7 +425,7 @@ export default function CandidateInterviews() {
             </div>
 
             {/* Footer */}
-            <div className="border-t border-gray-200 p-6 bg-gray-50 flex items-center justify-between">
+            <div className="border-t border-white/40 p-6 page-glass-inset flex items-center justify-between">
               <button
                 onClick={closeTimeSlotModal}
                 className="px-6 py-2 text-gray-600 hover:text-gray-800 font-semibold transition-colors"

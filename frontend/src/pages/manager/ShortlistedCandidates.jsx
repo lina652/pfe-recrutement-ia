@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import ManagerLayout from "../../components/manager/ManagerLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
 import API from "../../api/authApi"
 
 export default function ShortlistedCandidates() {
@@ -19,19 +20,21 @@ export default function ShortlistedCandidates() {
 
   return (
     <ManagerLayout>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Shortlisted Candidates</h1>
-        <p className="text-gray-500 mt-1">{total} candidates shortlisted by AI</p>
-      </div>
+      <PageHeader
+        eyebrow={PAGE_EYEBROWS.manager}
+        title="Shortlisted Candidates"
+        count={total}
+        countLabel="candidates shortlisted"
+      />
 
       {loading ? (
         <div className="flex justify-center mt-20">
           <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"/>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="page-glass overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="page-glass-thead border-b border-white/40">
               <tr>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Application ID</th>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Job ID</th>
@@ -41,7 +44,7 @@ export default function ShortlistedCandidates() {
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Submitted</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-white/30">
               {applications.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-12 text-gray-400">
@@ -50,7 +53,7 @@ export default function ShortlistedCandidates() {
                 </tr>
               ) : (
                 applications.map((app) => (
-                  <tr key={app.app_id} className="hover:bg-gray-50">
+                  <tr key={app.app_id} className="hover:bg-white/25">
                     <td className="px-6 py-4 font-mono text-xs text-gray-500">
                       {app.app_id.slice(0, 8)}...
                     </td>

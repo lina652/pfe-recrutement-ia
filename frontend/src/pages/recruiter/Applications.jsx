@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import RecruiterLayout from "../../components/recruiter/RecruiterLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
+import GlassSelect from "../../components/shared/GlassSelect"
 import API, { getRecruiterJobs } from "../../api/authApi"
 
 const STATUS_COLORS = {
@@ -9,6 +11,22 @@ const STATUS_COLORS = {
   REJECTED:     "bg-red-100 text-red-700",
   ACCEPTED:     "bg-emerald-100 text-emerald-700",
 }
+
+const STATUS_FILTERS = [
+  { value: "", label: "All statuses" },
+  { value: "PENDING", label: "Pending" },
+  { value: "UNDER_REVIEW", label: "Under review" },
+  { value: "SHORTLISTED", label: "Shortlisted" },
+  { value: "REJECTED", label: "Rejected" },
+  { value: "ACCEPTED", label: "Accepted" },
+]
+
+const filterPillClass = (active) =>
+  `rounded-full px-4 py-2 text-xs font-semibold transition ${
+    active
+      ? "bg-green-700 text-white shadow-sm ring-1 ring-green-800/20"
+      : "page-glass-pill text-slate-700 hover:bg-white/55"
+  }`
 
 export default function Applications() {
   const [applications, setApplications] = useState([])
@@ -56,6 +74,17 @@ export default function Applications() {
 
   useEffect(() => { fetchApplications() }, [statusFilter, jobFilter])
 
+  const jobOptions = useMemo(
+    () => [
+      { value: "", label: "All jobs" },
+      ...jobs.map((job) => ({
+        value: job.job_id,
+        label: `${job.title}${job.company_name ? ` · ${job.company_name}` : ""}`,
+      })),
+    ],
+    [jobs]
+  )
+
   const handleOverride = async (appId) => {
     if (!overrideForm.status || !overrideForm.reason) {
       setError("Please select a status and provide a reason")
@@ -80,39 +109,76 @@ export default function Applications() {
 
   return (
     <RecruiterLayout>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Applications</h1>
-        <p className="text-gray-500 mt-1">{total} total applications</p>
-      </div>
+      <PageHeader
+        eyebrow={PAGE_EYEBROWS.recruiter}
+        title="Applications"
+        count={total}
+        countLabel="total applications"
+      />
 
-      <div className="mb-6">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-          >
-            <option value="">All Statuses</option>
-            <option value="PENDING">Pending</option>
-            <option value="UNDER_REVIEW">Under Review</option>
-            <option value="SHORTLISTED">Shortlisted</option>
-            <option value="REJECTED">Rejected</option>
-            <option value="ACCEPTED">Accepted</option>
-          </select>
+      <div className="mx-auto mb-5 max-w-6xl">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-900/80">
+              Status
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {STATUS_FILTERS.map(({ value, label }) => (
+                <button
+                  key={value || "all-status"}
+                  type="button"
+                  onClick={() => setStatusFilter(value)}
+                  className={filterPillClass(statusFilter === value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <select
-            value={jobFilter}
-            onChange={(e) => setJobFilter(e.target.value)}
-            className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 min-w-[240px]"
-          >
-            <option value="">All Jobs</option>
-            {jobs.map((job) => (
-              <option key={job.job_id} value={job.job_id}>
-                {job.title} {job.company_name ? `- ${job.company_name}` : ""}
-              </option>
-            ))}
-          </select>
+          <div className="w-full sm:max-w-md sm:shrink-0">
+            <label
+              htmlFor="applications-job-filter"
+              className="mb-2.5 block text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-900/80"
+            >
+              Job
+            </label>
+            <GlassSelect
+              id="applications-job-filter"
+              aria-label="Filter by job"
+              value={jobFilter}
+              onChange={setJobFilter}
+              options={jobOptions}
+              placeholder="All jobs"
+            />
+          </div>
         </div>
+
+        {(statusFilter || jobFilter) && (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-slate-600">Active filters</span>
+            {statusFilter && (
+              <span className="page-glass-pill rounded-full px-3 py-1 text-xs font-semibold text-violet-900">
+                {STATUS_FILTERS.find((f) => f.value === statusFilter)?.label}
+              </span>
+            )}
+            {jobFilter && (
+              <span className="page-glass-pill max-w-[14rem] truncate rounded-full px-3 py-1 text-xs font-semibold text-violet-900">
+                {jobs.find((j) => j.job_id === jobFilter)?.title || "Selected job"}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter("")
+                setJobFilter("")
+              }}
+              className="ml-auto text-xs font-semibold text-violet-800 underline-offset-2 hover:underline"
+            >
+              Clear all
+            </button>
+          </div>
+        )}
       </div>
 
       {success && <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">{success}</div>}
@@ -123,9 +189,9 @@ export default function Applications() {
           <div className="w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full animate-spin"/>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="page-glass overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="page-glass-thead border-b border-white/40">
               <tr>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Application ID</th>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Candidate</th>
@@ -137,7 +203,7 @@ export default function Applications() {
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-white/30">
               {applications.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="text-center py-12 text-gray-400">
@@ -147,7 +213,7 @@ export default function Applications() {
               ) : (
                 applications.map((app) => (
                   <>
-                    <tr key={app.app_id} className="hover:bg-gray-50">
+                    <tr key={app.app_id} className="hover:bg-white/25">
                       <td className="px-6 py-4 font-mono text-xs text-gray-500">
                         {app.app_id.slice(0, 8)}...
                       </td>

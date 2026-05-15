@@ -5,6 +5,7 @@ import { getPublicJobs, matchJobsByCV, matchJobsByProfile, getMyApplications } f
 import { useAuth } from "../../context/AuthContext"
 import Navbar from "../../components/Navbar"
 import Toast from "../../components/Toast"
+import GlassSelect from "../../components/shared/GlassSelect"
 
 const SESSION_KEY = "talentos_ranked_jobs"
 const SESSION_CV_KEY = "talentos_cv_name"
@@ -233,14 +234,16 @@ export default function Jobs() {
       {/* ── HERO ── */}
       <section style={{
         background: "linear-gradient(135deg,#7B5AC8 0%,#9683EC 50%,#B8A8F0 100%)",
-        marginTop: "60px", position: "relative", overflow: "hidden",
+        marginTop: "60px", position: "relative", overflow: "visible",
         padding: "80px 40px 60px 40px", textAlign: "center"
       }}>
-        {/* Floating blobs */}
+        {/* Blobs — own layer so the section can stay overflow:visible for dropdowns */}
+        <div aria-hidden style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
         <div className="animate-float" style={{ position: "absolute", width: 80, height: 80, background: "linear-gradient(135deg,#f97316,#ef4444)", borderRadius: "50% 30% 60% 40%", top: 40, left: 60, opacity: 0.7, filter: "blur(2px)" }}/>
         <div className="animate-float" style={{ position: "absolute", width: 60, height: 60, background: "#06b6d4", borderRadius: "40% 60% 30% 70%", top: 20, right: 100, opacity: 0.6, filter: "blur(2px)", animationDelay: "1s" }}/>
         <div className="animate-float" style={{ position: "absolute", width: 50, height: 50, background: "linear-gradient(135deg,#B8A8F0,#9683EC)", borderRadius: "50% 40% 60% 30%", bottom: 40, left: 200, opacity: 0.7, filter: "blur(2px)", animationDelay: "2s" }}/>
         <div className="animate-float" style={{ position: "absolute", width: 70, height: 70, background: "linear-gradient(135deg,#f97316,#ef4444)", borderRadius: "40% 60% 50% 30%", bottom: 20, right: 300, opacity: 0.6, filter: "blur(2px)", animationDelay: "3s" }}/>
+        </div>
 
         <h1 style={{ fontSize: "48px", fontWeight: 200, color: "white", marginBottom: "16px", position: "relative", zIndex: 10, lineHeight: 1.2 }}>
           {t.findDreamJob}
@@ -274,12 +277,13 @@ export default function Jobs() {
 
         {/* Search bar */}
         <div style={{
-          display: "flex", maxWidth: 800, margin: "0 auto", gap: 0,
-          background: "white", borderRadius: 12, overflow: "hidden",
-          boxShadow: "0 8px 30px rgba(0,0,0,0.1)", position: "relative", zIndex: 10
+          display: "flex", alignItems: "stretch", maxWidth: 800, margin: "0 auto", gap: 0,
+          background: "white", borderRadius: 12, overflow: "visible",
+          boxShadow: "0 8px 24px rgba(15,23,42,0.08)", position: "relative", zIndex: 10
         }}>
           <input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder={t.jobTitle}
+            className="rounded-s-xl"
             style={{ flex: 2, padding: "16px 20px", border: "none", outline: "none", fontSize: 14, color: "#374151" }}
           />
           <div style={{ width: 1, background: "#e5e7eb", margin: "8px 0" }}/>
@@ -288,15 +292,23 @@ export default function Jobs() {
             style={{ flex: 1, padding: "16px 20px", border: "none", outline: "none", fontSize: 14, color: "#374151" }}
           />
           <div style={{ width: 1, background: "#e5e7eb", margin: "8px 0" }}/>
-          <select value={contractType} onChange={(e) => setContractType(e.target.value)}
-            style={{ flex: 1, padding: "16px 20px", border: "none", outline: "none", fontSize: 14, color: "#374151", background: "white", cursor: "pointer" }}
-          >
-            <option value="">{t.allTypes}</option>
-            <option value="CDI">CDI</option>
-            <option value="CDD">CDD</option>
-            <option value="INTERNSHIP">Internship</option>
-            <option value="FREELANCE">Freelance</option>
-          </select>
+          <GlassSelect
+            id="jobs-contract-type"
+            aria-label={t.contract}
+            value={contractType}
+            onChange={setContractType}
+            plainTrigger
+            options={[
+              { value: "", label: t.allTypes },
+              { value: "CDI", label: "CDI" },
+              { value: "CDD", label: "CDD" },
+              { value: "INTERNSHIP", label: "Internship" },
+              { value: "FREELANCE", label: "Freelance" },
+            ]}
+            placeholder={t.allTypes}
+            className="z-[21] flex-[0_0_10.5rem] min-h-[52px] min-w-0 self-stretch sm:flex-[0_0_11.5rem] [&>button]:min-h-[52px] [&>button]:!rounded-none [&>button]:!rounded-e-xl [&>button]:!px-3 [&>button]:!py-0"
+            listClassName="!mt-1"
+          />
         </div>
       </section>
 

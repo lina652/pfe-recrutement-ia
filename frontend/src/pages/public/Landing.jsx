@@ -128,25 +128,30 @@ export default function Landing() {
           </p>
           <div style={{ display:"flex", gap:"16px" }}>
             <button
+              type="button"
               onClick={() => navigate("/jobs")}
               style={{
-                background:"#5b21b6", color:"white", border:"none",
-                padding:"14px 36px", fontSize:"13px", fontWeight:700,
-                letterSpacing:"3px", textTransform:"uppercase",
-                borderRadius:"2px", cursor:"pointer"
+                background: "#ffffff", color: "#5b21b6", border: "none",
+                padding: "10px 24px", fontSize: "12px", fontWeight: 700,
+                letterSpacing: "2px", textTransform: "uppercase",
+                borderRadius: "14px", cursor: "pointer",
               }}
+              onMouseOver={(e) => { e.currentTarget.style.opacity = "0.85" }}
+              onMouseOut={(e) => { e.currentTarget.style.opacity = "1" }}
             >
               {t.findJob}
             </button>
             <button
+              type="button"
               onClick={() => navigate("/company/signup")}
               style={{
-                background:"transparent", color:"white",
-                border:"2px solid white",
-                padding:"14px 36px", fontSize:"13px", fontWeight:700,
-                letterSpacing:"3px", textTransform:"uppercase",
-                borderRadius:"2px", cursor:"pointer"
+                background: "#5b21b6", color: "white", border: "none",
+                padding: "10px 24px", fontSize: "12px", fontWeight: 700,
+                letterSpacing: "2px", textTransform: "uppercase",
+                borderRadius: "14px", cursor: "pointer",
               }}
+              onMouseOver={(e) => { e.currentTarget.style.opacity = "0.85" }}
+              onMouseOut={(e) => { e.currentTarget.style.opacity = "1" }}
             >
               {t.postJob}
             </button>
@@ -211,7 +216,7 @@ export default function Landing() {
                 onClick={() => setExpandedService(expandedService === i ? null : i)}
                 style={{
                   marginTop:16, background:"linear-gradient(135deg,#7B5AC8,#9683EC)",
-                  color:"white", border:"none", borderRadius:8,
+                  color:"white", border:"none", borderRadius:14,
                   padding:"8px 20px", fontSize:12, fontWeight:600,
                   cursor:"pointer", transition:"all 0.3s ease"
                 }}

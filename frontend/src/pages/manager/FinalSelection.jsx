@@ -1,5 +1,6 @@
   import { useEffect, useState } from "react"
   import ManagerLayout from "../../components/manager/ManagerLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
   import API from "../../api/authApi"
 
   export default function FinalSelection() {
@@ -48,12 +49,11 @@
 
     return (
       <ManagerLayout>
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">Final Selection</h1>
-          <p className="text-gray-500 mt-1">
-            Select the best candidate from the shortlist
-          </p>
-        </div>
+        <PageHeader
+          eyebrow={PAGE_EYEBROWS.manager}
+          title="Final Selection"
+          subtitle="Select the best candidate from the shortlist"
+        />
 
         {success && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
@@ -71,13 +71,13 @@
             <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"/>
           </div>
         ) : applications.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
+          <div className="page-glass p-12 text-center text-gray-400">
             No shortlisted candidates available for selection
           </div>
         ) : (
           <div className="space-y-4">
             {applications.map((app) => (
-              <div key={app.app_id} className="bg-white rounded-xl border border-gray-200 p-6">
+              <div key={app.app_id} className="page-glass p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-semibold text-gray-800">

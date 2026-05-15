@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import SuperAdminLayout from "../../components/superadmin/SuperAdminLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
 import { getCompanies, toggleCompany } from "../../api/authApi"
 
 export default function Companies() {
@@ -36,17 +37,12 @@ export default function Companies() {
 
   return (
     <SuperAdminLayout>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Companies</h1>
-        <p className="text-gray-500 mt-1">
-          {companies.length} companies registered on the platform
-        </p>
-      </div>
-
-      <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
-        💡 Companies register themselves at <strong>/company/signup</strong>. 
-        Your role is to monitor and suspend if needed.
-      </div>
+      <PageHeader
+        eyebrow={PAGE_EYEBROWS.superadmin}
+        title="Companies"
+        count={companies.length}
+        countLabel="companies registered"
+      />
 
       {success && <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">{success}</div>}
       {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
@@ -56,9 +52,9 @@ export default function Companies() {
           <div className="w-8 h-8 border-4 border-gray-600 border-t-transparent rounded-full animate-spin"/>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="page-glass overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="page-glass-thead border-b border-white/40">
               <tr>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Company</th>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Industry</th>
@@ -68,7 +64,7 @@ export default function Companies() {
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-white/30">
               {companies.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-12 text-gray-400">
@@ -77,7 +73,7 @@ export default function Companies() {
                 </tr>
               ) : (
                 companies.map((company) => (
-                  <tr key={company.company_id} className="hover:bg-gray-50">
+                  <tr key={company.company_id} className="hover:bg-white/25">
                     <td className="px-6 py-4 font-semibold text-gray-800">{company.name}</td>
                     <td className="px-6 py-4 text-gray-500">{company.industry || "—"}</td>
                     <td className="px-6 py-4 font-mono text-xs text-gray-500">/{company.slug}</td>

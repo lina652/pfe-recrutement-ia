@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import ManagerLayout from "../../components/manager/ManagerLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
 import API from "../../api/authApi"
 
 const STATUS_STYLES = {
@@ -23,9 +24,12 @@ const initialForm = {
 
 const getMinClosingDate = () => {
   const date = new Date()
-  date.setDate(date.getDate() + 7) // Minimum 7 days from now
-  return date.toISOString().split('T')[0]
+  date.setDate(date.getDate() + 7)
+  return date.toISOString().split("T")[0]
 }
+
+const fieldClass =
+  "page-glass-input w-full rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200/50"
 
 export default function JobRequirements() {
   const [requests, setRequests] = useState([])
@@ -99,163 +103,184 @@ export default function JobRequirements() {
 
   return (
     <ManagerLayout>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Job Requirements</h1>
-        <p className="text-gray-500 mt-1">Create a job request, then HR will approve or reject it.</p>
-      </div>
+      <PageHeader
+        eyebrow={PAGE_EYEBROWS.manager}
+        title="Job Requirements"
+        subtitle="Create a job request, then HR will approve or reject it."
+      />
 
       {success && (
-        <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-700 rounded-xl text-sm">
+        <div className="mx-auto mb-4 max-w-6xl rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
           ✅ {success}
         </div>
       )}
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
+        <div className="mx-auto mb-4 max-w-6xl rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           ⚠️ {error}
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm mb-6">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">New Requirement Request</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Job Title *</label>
-            <input
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Senior Backend Engineer"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-            <input
-              value={form.location}
-              onChange={(e) => setForm({ ...form, location: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Tunis / Remote"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-            <input
-              value={form.department}
-              onChange={(e) => setForm({ ...form, department: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Engineering"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contract Type</label>
-            <select
-              value={form.contract_type}
-              onChange={(e) => setForm({ ...form, contract_type: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-            >
-              <option value="CDI">CDI</option>
-              <option value="CDD">CDD</option>
-              <option value="INTERNSHIP">Internship</option>
-              <option value="FREELANCE">Freelance</option>
-            </select>
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              rows={2}
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Role summary and responsibilities..."
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Requirements *</label>
-            <textarea
-              rows={4}
-              value={form.requirements}
-              onChange={(e) => setForm({ ...form, requirements: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Must-have qualifications..."
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Required Skills</label>
-            <input
-              value={form.required_skills}
-              onChange={(e) => setForm({ ...form, required_skills: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Python, SQL, React"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Experience (years)</label>
-            <input
-              type="number"
-              min="0"
-              value={form.experience_years}
-              onChange={(e) => setForm({ ...form, experience_years: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="3"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Education Level</label>
-            <select
-              value={form.education_level}
-              onChange={(e) => setForm({ ...form, education_level: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-            >
-              <option value="">Select level</option>
-              <option value="BAC">BAC</option>
-              <option value="BAC+2">BAC+2</option>
-              <option value="BAC+3">BAC+3</option>
-              <option value="BAC+5">BAC+5</option>
-              <option value="PHD">PHD</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Closing Date *
-              <span className="text-xs text-gray-500 ml-2">(Job will close on this date)</span>
-            </label>
-            <input
-              type="date"
-              value={form.closing_date}
-              min={getMinClosingDate()}
-              onChange={(e) => setForm({ ...form, closing_date: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              On this date, the job will be removed from listings and top 10 candidates will be selected for interviews.
-            </p>
-          </div>
-        </div>
+      <div className="mx-auto mb-6 max-w-6xl">
+        <h2 className="mb-4 text-lg font-semibold text-slate-800">New Requirement Request</h2>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-stretch">
+          <section className="page-glass flex flex-col p-5 shadow-sm">
+            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-violet-900/80">
+              Job details
+            </h3>
+            <p className="mb-4 text-xs text-slate-500">Role title, location, and contract information.</p>
+            <div className="flex flex-1 flex-col gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Job Title *</label>
+                <input
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  className={fieldClass}
+                  placeholder="Senior Backend Engineer"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Location</label>
+                <input
+                  value={form.location}
+                  onChange={(e) => setForm({ ...form, location: e.target.value })}
+                  className={fieldClass}
+                  placeholder="Tunis / Remote"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Department</label>
+                <input
+                  value={form.department}
+                  onChange={(e) => setForm({ ...form, department: e.target.value })}
+                  className={fieldClass}
+                  placeholder="Engineering"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Contract Type</label>
+                <select
+                  value={form.contract_type}
+                  onChange={(e) => setForm({ ...form, contract_type: e.target.value })}
+                  className={fieldClass}
+                >
+                  <option value="CDI">CDI</option>
+                  <option value="CDD">CDD</option>
+                  <option value="INTERNSHIP">Internship</option>
+                  <option value="FREELANCE">Freelance</option>
+                </select>
+              </div>
+              <div className="flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
+                <textarea
+                  rows={4}
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  className={`${fieldClass} min-h-[6.5rem] resize-y`}
+                  placeholder="Role summary and responsibilities..."
+                />
+              </div>
+            </div>
+          </section>
 
-        <div className="mt-4 flex items-center gap-3">
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || hasPending}
-            className={`px-6 py-2 rounded-lg text-sm font-semibold transition ${
-              submitting || hasPending
-                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                : "bg-purple-700 text-white hover:bg-purple-800"
-            }`}
-          >
-            {hasPending ? "Awaiting HR Review" : "Send to HR"}
-          </button>
-          <p className="text-xs text-gray-400">
-            {hasPending
-              ? "You can submit another request after HR reviews the current one."
-              : "HR will approve or reject this request."}
-          </p>
+          <section className="page-glass flex flex-col p-5 shadow-sm">
+            <h3 className="mb-1 text-sm font-bold uppercase tracking-wide text-violet-900/80">
+              Requirements & timeline
+            </h3>
+            <p className="mb-4 text-xs text-slate-500">Skills, qualifications, and closing date for HR review.</p>
+            <div className="flex flex-1 flex-col gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Requirements *</label>
+                <textarea
+                  rows={4}
+                  value={form.requirements}
+                  onChange={(e) => setForm({ ...form, requirements: e.target.value })}
+                  className={`${fieldClass} min-h-[6.5rem] resize-y`}
+                  placeholder="Must-have qualifications..."
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Required Skills</label>
+                  <input
+                    value={form.required_skills}
+                    onChange={(e) => setForm({ ...form, required_skills: e.target.value })}
+                    className={fieldClass}
+                    placeholder="Python, SQL, React"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Experience (years)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.experience_years}
+                    onChange={(e) => setForm({ ...form, experience_years: e.target.value })}
+                    className={fieldClass}
+                    placeholder="3"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Education Level</label>
+                <select
+                  value={form.education_level}
+                  onChange={(e) => setForm({ ...form, education_level: e.target.value })}
+                  className={fieldClass}
+                >
+                  <option value="">Select level</option>
+                  <option value="BAC">BAC</option>
+                  <option value="BAC+2">BAC+2</option>
+                  <option value="BAC+3">BAC+3</option>
+                  <option value="BAC+5">BAC+5</option>
+                  <option value="PHD">PHD</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Closing Date *
+                  <span className="ml-2 text-xs font-normal text-gray-500">(Job closes on this date)</span>
+                </label>
+                <input
+                  type="date"
+                  value={form.closing_date}
+                  min={getMinClosingDate()}
+                  onChange={(e) => setForm({ ...form, closing_date: e.target.value })}
+                  className={fieldClass}
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  On this date, the job is removed from listings and top candidates are shortlisted for interviews.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-2 border-t border-white/40 pt-4 sm:flex-row sm:items-center sm:gap-3">
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting || hasPending}
+                className={`rounded-xl px-6 py-2.5 text-sm font-semibold transition ${
+                  submitting || hasPending
+                    ? "cursor-not-allowed bg-gray-200 text-gray-500"
+                    : "bg-purple-700 text-white shadow-sm hover:bg-purple-800"
+                }`}
+              >
+                {hasPending ? "Awaiting HR Review" : "Send to HR"}
+              </button>
+              <p className="text-xs text-gray-500">
+                {hasPending
+                  ? "You can submit another request after HR reviews the current one."
+                  : "HR will approve or reject this request."}
+              </p>
+            </div>
+          </section>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">My Request History</h2>
+      <div className="page-glass mx-auto max-w-6xl p-5 shadow-sm">
+        <h2 className="mb-4 text-lg font-semibold text-gray-800">My Request History</h2>
         {loading ? (
           <div className="flex justify-center py-10">
-            <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-purple-600 border-t-transparent" />
           </div>
         ) : requests.length === 0 ? (
           <p className="text-sm text-gray-400">No requests submitted yet.</p>
@@ -264,21 +289,21 @@ export default function JobRequirements() {
             {requests.map((r) => {
               const status = STATUS_STYLES[r.status] || STATUS_STYLES.PENDING
               return (
-                <div key={r.request_id} className="border border-gray-200 rounded-lg p-4">
+                <div key={r.request_id} className="page-glass-inset rounded-2xl p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="font-semibold text-gray-800">{r.title}</h3>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="mt-1 text-xs text-gray-500">
                         {new Date(r.created_at).toLocaleString()}
                       </p>
                     </div>
-                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${status.bg} ${status.text}`}>
+                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${status.bg} ${status.text}`}>
                       {status.label}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600 mt-2 whitespace-pre-line">{r.requirements}</p>
+                  <p className="mt-2 whitespace-pre-line text-sm text-gray-600">{r.requirements}</p>
                   {r.status === "REJECTED" && r.rejection_reason && (
-                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                    <div className="mt-2 rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
                       Rejection reason: {r.rejection_reason}
                     </div>
                   )}

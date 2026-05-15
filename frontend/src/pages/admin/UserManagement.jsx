@@ -1,9 +1,38 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import AdminLayout from "../../components/admin/AdminLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
+import GlassSelect from "../../components/shared/GlassSelect"
 import { getUsers, toggleUser, changeRole } from "../../api/authApi"
 
 const ROLES = ["CANDIDATE", "RECRUITER", "HIRING_MANAGER", "ADMINISTRATOR"]
+
+const ROLE_LABELS = {
+  CANDIDATE: "Candidate",
+  RECRUITER: "Recruiter",
+  HIRING_MANAGER: "Hiring manager",
+  ADMINISTRATOR: "Administrator",
+}
+
+const ROLE_FILTER_OPTIONS = [
+  {
+    value: "",
+    label: "All roles",
+    description: "Show every user in your company.",
+  },
+  ...ROLES.map((r) => ({
+    value: r,
+    label: ROLE_LABELS[r],
+    description:
+      r === "CANDIDATE"
+        ? "Applicants and external candidates."
+        : r === "RECRUITER"
+          ? "HR staff posting jobs and pipelines."
+          : r === "HIRING_MANAGER"
+            ? "Managers defining needs and shortlists."
+            : "Company admins and access control.",
+  })),
+]
 
 const ROLE_COLORS = {
   CANDIDATE:      "bg-purple-100 text-purple-700",
@@ -66,18 +95,20 @@ export default function UserManagement() {
 
   return (
     <AdminLayout>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">User Management</h1>
-          <p className="text-gray-500 mt-1">{total} users total</p>
-        </div>
+      <PageHeader
+        eyebrow={PAGE_EYEBROWS.admin}
+        title="User Management"
+        count={total}
+        countLabel="users total"
+      >
         <button
+          type="button"
           onClick={() => navigate("/admin/invite")}
-          className="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-800 transition"
+          className="rounded-xl bg-violet-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-800"
         >
           + Invite Staff
         </button>
-      </div>
+      </PageHeader>
 
       <div className="flex gap-4 mb-6">
         <input
@@ -85,18 +116,18 @@ export default function UserManagement() {
           placeholder="Search by name or email..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label="Search users by name or email"
+          className="page-glass-input flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-200/50"
         />
-        <select
+        <GlassSelect
+          id="admin-users-role-filter"
+          aria-label="Filter users by role"
+          className="w-full min-w-[15rem] sm:max-w-xs sm:shrink-0"
           value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value)}
-          className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">All Roles</option>
-          {ROLES.map((r) => (
-            <option key={r} value={r}>{r.replace("_", " ")}</option>
-          ))}
-        </select>
+          onChange={(v) => setRoleFilter(v)}
+          options={ROLE_FILTER_OPTIONS}
+          placeholder="All roles"
+        />
       </div>
 
       {success && <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">{success}</div>}
@@ -107,9 +138,9 @@ export default function UserManagement() {
           <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"/>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="page-glass overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="page-glass-thead border-b border-white/40">
               <tr>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Name</th>
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Email</th>
@@ -119,14 +150,14 @@ export default function UserManagement() {
                 <th className="text-left px-6 py-3 text-gray-600 font-medium">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-white/30">
               {users.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-12 text-gray-400">No users found</td>
                 </tr>
               ) : (
                 users.map((user) => (
-                  <tr key={user.user_id} className="hover:bg-gray-50">
+                  <tr key={user.user_id} className="hover:bg-white/25">
                     <td className="px-6 py-4 font-medium text-gray-800">
                       {user.first_name} {user.last_name}
                     </td>
@@ -138,7 +169,7 @@ export default function UserManagement() {
                         className={`text-xs font-semibold px-2 py-1 rounded-full border-0 cursor-pointer ${ROLE_COLORS[user.role]}`}
                       >
                         {ROLES.map((r) => (
-                          <option key={r} value={r}>{r.replace("_", " ")}</option>
+                          <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                         ))}
                       </select>
                     </td>

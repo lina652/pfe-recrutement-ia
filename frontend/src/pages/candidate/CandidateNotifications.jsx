@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import CandidateLayout from "../../components/candidate/CandidateLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
 import API, { getCandidateNotifications, markCandidateNotificationRead } from "../../api/authApi"
 
 const TYPE_STYLES = {
@@ -73,31 +74,25 @@ export default function CandidateNotifications() {
 
   return (
     <CandidateLayout>
-      <div className="mb-8">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
-            <p className="text-gray-500 mt-2">
-              {unreadCount > 0 ? (
-                <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
-                  {`You have ${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}`}
-                </span>
-              ) : (
-                <span className="text-emerald-600 font-medium">✓ You're all caught up!</span>
-              )}
-            </p>
-          </div>
-          {unreadCount > 0 && (
-            <button 
-              onClick={markAllRead} 
-              className="px-4 py-2 text-sm font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-            >
-              Mark all as read
-            </button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        eyebrow={PAGE_EYEBROWS.candidate}
+        title="Notifications"
+        subtitle={
+          unreadCount > 0
+            ? `You have ${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}`
+            : "You're all caught up!"
+        }
+      >
+        {unreadCount > 0 && (
+          <button
+            type="button"
+            onClick={markAllRead}
+            className="rounded-xl bg-violet-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-800"
+          >
+            Mark all as read
+          </button>
+        )}
+      </PageHeader>
 
       {loading ? (
         <div className="flex justify-center items-center mt-20">
@@ -107,7 +102,7 @@ export default function CandidateNotifications() {
           </div>
         </div>
       ) : notifications.length === 0 ? (
-        <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl border border-gray-200 p-16 text-center shadow-sm">
+        <div className="page-glass p-16 text-center">
           <p className="text-6xl mb-4">🔔</p>
           <p className="text-lg font-semibold text-gray-600 mb-2">No notifications yet</p>
           <p className="text-sm text-gray-400">Check back later for interview invitations and updates</p>
@@ -121,7 +116,7 @@ export default function CandidateNotifications() {
               <div 
                 key={n.notification_id} 
                 onClick={() => handleNotificationClick(n)} 
-                className={`bg-white rounded-xl border ${style.color} p-5 transition-all duration-200 ${
+                className={`page-glass border ${style.color} p-5 transition-all duration-200 ${
                   isClickable ? "cursor-pointer shadow-sm hover:shadow-md hover:scale-[1.01]" : "opacity-80"
                 }`}
               >

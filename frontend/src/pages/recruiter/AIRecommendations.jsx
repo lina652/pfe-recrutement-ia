@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "../../context/AuthContext"
 import RecruiterLayout from "../../components/recruiter/RecruiterLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
 import { 
   getRAGJobs, 
   getChatSuggestions,
@@ -12,6 +13,8 @@ import {
   sendRAGMessage
 } from "../../api/authApi"
 import Toast from "../../components/Toast"
+import { DashboardNavIcon } from "../../components/shared/DashboardNavIcons"
+import GlassSelect from "../../components/shared/GlassSelect"
 
 export default function AIRecommendations() {
   const { user } = useAuth()
@@ -209,11 +212,21 @@ export default function AIRecommendations() {
     return matchJob && matchFavorite
   })
 
+  const jobFilterOptions = [
+    { value: "all", label: "All jobs" },
+    ...jobs.map((job) => ({ value: job.job_id, label: job.title })),
+  ]
+
+  const newConversationJobOptions = [
+    { value: "", label: "Select job" },
+    ...jobs.map((job) => ({ value: job.job_id, label: job.title })),
+  ]
+
   if (loading) {
     return (
       <RecruiterLayout>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="mt-20 flex justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-green-600 border-t-transparent" />
         </div>
       </RecruiterLayout>
     )
@@ -221,16 +234,16 @@ export default function AIRecommendations() {
 
   return (
     <RecruiterLayout>
-      <div className="h-full flex flex-col p-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">AI Insights</h1>
-        <p className="text-gray-600 mb-6">
-          Ask questions about your candidates using AI analysis
-        </p>
+      <PageHeader
+        eyebrow={PAGE_EYEBROWS.recruiter}
+        title="AI Insights"
+        subtitle="Ask questions about your candidates using AI analysis"
+      />
 
-        <div className="grid md:grid-cols-4 gap-6 flex-1">
+      <div className="mx-auto grid max-w-6xl gap-6 md:grid-cols-4 md:min-h-[32rem]">
           {/* Sidebar - Conversations */}
           <div className="md:col-span-1">
-            <div className="bg-white rounded-lg shadow flex flex-col h-full">
+            <div className="page-glass flex min-h-[28rem] flex-col md:min-h-[32rem]">
               <div className="p-4 border-b">
                 <button
                   onClick={() => setShowNewConversation(!showNewConversation)}
@@ -239,18 +252,14 @@ export default function AIRecommendations() {
                   + New Conversation
                 </button>
                 <div className="mt-3 space-y-2">
-                  <select
+                  <GlassSelect
+                    id="ai-insights-job-filter"
+                    aria-label="Filter conversations by job"
                     value={selectedJobFilter}
-                    onChange={(e) => setSelectedJobFilter(e.target.value)}
-                    className="w-full px-3 py-2 border rounded text-sm"
-                  >
-                    <option value="all">All jobs</option>
-                    {jobs.map((job) => (
-                      <option key={job.job_id} value={job.job_id}>
-                        {job.title}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setSelectedJobFilter}
+                    options={jobFilterOptions}
+                    placeholder="All jobs"
+                  />
                   <label className="flex items-center gap-2 text-sm text-gray-700">
                     <input
                       type="checkbox"
@@ -271,18 +280,15 @@ export default function AIRecommendations() {
                     placeholder="Conversation title..."
                     className="w-full px-3 py-2 border rounded mb-2 text-sm"
                   />
-                  <select
+                  <GlassSelect
+                    id="ai-new-conv-job"
+                    aria-label="Job for new conversation"
+                    className="mb-2"
                     value={selectedJobForNew}
-                    onChange={(e) => setSelectedJobForNew(e.target.value)}
-                    className="w-full px-3 py-2 border rounded mb-2 text-sm"
-                  >
-                    <option value="">Select Job</option>
-                    {jobs.map(job => (
-                      <option key={job.job_id} value={job.job_id}>
-                        {job.title}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setSelectedJobForNew}
+                    options={newConversationJobOptions}
+                    placeholder="Select job"
+                  />
                   <div className="flex gap-2">
                     <button
                       onClick={handleCreateConversation}
@@ -300,7 +306,7 @@ export default function AIRecommendations() {
                     </button>
                     <button
                       onClick={() => setShowNewConversation(false)}
-                      className="flex-1 px-3 py-1 bg-gray-400 hover:bg-gray-500 text-white text-sm rounded transition"
+                      className="flex-1 rounded bg-gray-400 px-3 py-1 text-sm text-white transition hover:bg-gray-500"
                     >
                       Cancel
                     </button>
@@ -315,10 +321,10 @@ export default function AIRecommendations() {
                   filteredConversations.map(conv => (
                     <div
                       key={conv.conversation_id}
-                      className={`p-3 rounded-lg transition ${
+                      className={`rounded-xl p-3 transition ${
                         selectedConversationId === conv.conversation_id
-                          ? "bg-blue-100 border-l-4 border-blue-600"
-                          : "bg-gray-50 hover:bg-gray-100"
+                          ? "bg-white/55 shadow-inner ring-1 ring-white/60"
+                          : "page-glass-inset hover:bg-white/45"
                       }`}
                     >
                       {editingConvId === conv.conversation_id ? (
@@ -362,27 +368,35 @@ export default function AIRecommendations() {
                               {conv.message_count} messages
                             </p>
                           </button>
-                          <div className="flex gap-1 mt-2 justify-end">
+                          <div className="mt-2 flex justify-end gap-0.5">
                             <button
+                              type="button"
                               onClick={() => handleToggleFavorite(conv.conversation_id, conv.is_favorite)}
-                              className={`text-lg ${conv.is_favorite ? "text-yellow-400" : "text-gray-300"} hover:text-yellow-400 transition`}
+                              className={`rounded-lg p-1.5 transition hover:bg-white/55 ${
+                                conv.is_favorite ? "text-amber-500" : "text-slate-400 hover:text-amber-500"
+                              }`}
+                              aria-label={conv.is_favorite ? "Remove from favorites" : "Add to favorites"}
                             >
-                              ⭐
+                              <DashboardNavIcon name="star" className="h-4 w-4" />
                             </button>
                             <button
+                              type="button"
                               onClick={() => {
                                 setEditingConvId(conv.conversation_id)
                                 setEditingTitle(conv.title)
                               }}
-                              className="text-gray-400 hover:text-blue-600 transition text-sm"
+                              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white/55 hover:text-emerald-800"
+                              aria-label="Rename conversation"
                             >
-                              ✏️
+                              <DashboardNavIcon name="pencil" className="h-4 w-4" />
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleDeleteConversation(conv.conversation_id)}
-                              className="text-gray-400 hover:text-red-600 transition text-sm"
+                              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                              aria-label="Delete conversation"
                             >
-                              🗑️
+                              <DashboardNavIcon name="trash" className="h-4 w-4" />
                             </button>
                           </div>
                         </>
@@ -395,7 +409,7 @@ export default function AIRecommendations() {
           </div>
 
           {/* Chat Area */}
-          <div className="md:col-span-3 flex flex-col bg-white rounded-lg shadow overflow-hidden">
+          <div className="flex min-h-[28rem] flex-col overflow-hidden page-glass md:col-span-3 md:min-h-[32rem]">
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {!selectedConversationId ? (
@@ -457,7 +471,7 @@ export default function AIRecommendations() {
                   ))}
                   {isLoading && (
                     <div className="flex justify-start">
-                      <div className="bg-gray-100 p-4 rounded-lg">
+                      <div className="page-glass-inset rounded-2xl p-4">
                         <div className="flex gap-2">
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
@@ -494,7 +508,7 @@ export default function AIRecommendations() {
                   onChange={(e) => setQuestion(e.target.value)}
                   placeholder="Ask about candidates..."
                   disabled={isLoading}
-                  className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+                  className="page-glass-input flex-1 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-violet-200/50 disabled:opacity-60"
                 />
                 <button
                   type="submit"
@@ -506,7 +520,6 @@ export default function AIRecommendations() {
               </form>
             </div>
           </div>
-        </div>
       </div>
 
       {toast && <Toast type={toast.type} message={toast.message} />}

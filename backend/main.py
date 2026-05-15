@@ -1,9 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 import os
 from database import engine, Base
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import OperationalError
 from core.config import settings
 from api.routes.auth import router as auth_router
 from api.routes.admin import router as admin_router
@@ -142,6 +144,21 @@ if settings.DEBUG:
     _cors_kw["allow_origin_regex"] = r"http://(localhost|127\.0\.0\.1):\d+$"
 
 app.add_middleware(CORSMiddleware, **_cors_kw)
+
+
+@app.exception_handler(OperationalError)
+async def database_unavailable(_request: Request, _exc: OperationalError):
+    """Return 503 with CORS headers so the browser shows DB errors instead of a fake CORS failure."""
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": (
+                "Database is unavailable. Start PostgreSQL "
+                "(e.g. docker compose up -d postgres) and check DATABASE_URL in backend/.env."
+            )
+        },
+    )
+
 
 os.makedirs("interview_media", exist_ok=True)
 app.mount("/media", StaticFiles(directory="interview_media"), name="media")

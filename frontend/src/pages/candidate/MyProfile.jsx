@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import CandidateLayout from "../../components/candidate/CandidateLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
 import { getCandidateProfile } from "../../api/authApi"
 
 export default function MyProfile() {
@@ -23,35 +24,37 @@ export default function MyProfile() {
 
   return (
     <CandidateLayout>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-800">My Profile</h1>
-        <p className="text-gray-500 mt-1">Your information extracted from your CV</p>
-      </div>
+      <PageHeader
+        eyebrow={PAGE_EYEBROWS.candidate}
+        title="My Profile"
+        subtitle="Your information extracted from your CV"
+        maxWidth="max-w-2xl"
+      />
 
       <div className="max-w-2xl space-y-4">
 
         {/* Personal Info */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="page-glass p-6">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">
             Personal Information
           </h2>
           <div className="space-y-3">
 
-            <div className="flex justify-between border-b border-gray-100 pb-3">
+            <div className="flex justify-between border-b border-white/40 pb-3">
               <span className="text-sm text-gray-500">Full Name</span>
               <span className="text-sm font-medium text-gray-800">
                 {profile?.first_name} {profile?.last_name}
               </span>
             </div>
 
-            <div className="flex justify-between border-b border-gray-100 pb-3">
+            <div className="flex justify-between border-b border-white/40 pb-3">
               <span className="text-sm text-gray-500">Email</span>
               <span className="text-sm font-medium text-gray-800">
                 {profile?.email}
               </span>
             </div>
 
-            <div className="flex justify-between border-b border-gray-100 pb-3">
+            <div className="flex justify-between border-b border-white/40 pb-3">
               <span className="text-sm text-gray-500">Phone</span>
               <span className="text-sm font-medium text-gray-800">
                 {profile?.phone || "Not provided"}
@@ -59,7 +62,7 @@ export default function MyProfile() {
             </div>
 
             {profile?.linkedin_url && (
-  <div className="flex justify-between border-b border-gray-100 pb-3">
+  <div className="flex justify-between border-b border-white/40 pb-3">
     <span className="text-sm text-gray-500">LinkedIn</span>
     <a // <--- You were missing this opening 'a' tag
       href={profile.linkedin_url}
@@ -77,7 +80,7 @@ export default function MyProfile() {
 
         {/* Skills */}
         {profile?.skills?.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="page-glass p-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-4">
               Skills Detected by AI
             </h2>
@@ -95,7 +98,7 @@ export default function MyProfile() {
         )}
 
         {/* Info box */}
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+        <div className="page-glass-inset rounded-2xl border border-blue-200/60 p-4">
           <p className="text-sm text-blue-700">
             💡 Your profile was automatically created from your CV.
             More details will be added after the AI pipeline processes your application.

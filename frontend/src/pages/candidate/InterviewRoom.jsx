@@ -298,7 +298,7 @@ export default function InterviewRoom() {
         {/* Invitation Stage */}
         {stage === "invitation" && (
           <div className="flex items-center justify-center min-h-screen p-6">
-            <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full mx-4">
+            <div className="page-glass shadow-xl p-8 max-w-2xl w-full mx-4">
               <h2 className="text-3xl font-bold text-gray-800 mb-2 text-center">Interview Invitation</h2>
               <p className="text-gray-600 text-center mb-6">
                 You have received an interview invitation. Please review the details below and confirm your attendance or decline if you're unavailable.
@@ -353,7 +353,7 @@ export default function InterviewRoom() {
         {/* Language Selection Stage */}
         {stage === "language-select" && (
           <div className="flex items-center justify-center min-h-screen">
-            <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full mx-4">
+            <div className="page-glass shadow-xl p-8 max-w-md w-full mx-4">
               <h2 className="text-3xl font-bold text-gray-800 mb-2 text-center">Interview</h2>
               <p className="text-gray-600 text-center mb-8">
                 Select your preferred interview language
@@ -398,7 +398,7 @@ export default function InterviewRoom() {
         {/* Ready Stage */}
         {stage === "ready" && (
           <div className="flex items-center justify-center min-h-screen">
-            <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full mx-4 text-center">
+            <div className="page-glass shadow-xl p-8 max-w-md w-full mx-4 text-center">
               <h2 className="text-3xl font-bold text-gray-800 mb-2">Ready to Start</h2>
               <p className="text-gray-600 mb-8">
                 Your interview is loaded. Ensure your microphone and camera are working properly.
@@ -487,11 +487,11 @@ export default function InterviewRoom() {
               </div>
 
               {/* Transcript Panel */}
-              <div className="bg-white rounded-lg shadow-lg p-4 max-h-96 overflow-y-auto">
+              <div className="page-glass p-4 max-h-96 overflow-y-auto">
                 <h3 className="font-bold text-lg mb-4">Transcript</h3>
                 <div className="space-y-4">
                   {messages.map((msg, i) => (
-                    <div key={i} className={`p-3 rounded ${msg.role === "bot" ? "bg-blue-50" : "bg-gray-50"}`}>
+                    <div key={i} className={`p-3 rounded-xl ${msg.role === "bot" ? "page-glass-inset bg-blue-50/40" : "page-glass-inset"}`}>
                       <p className="text-xs font-bold text-gray-600 mb-1">{msg.role.toUpperCase()}</p>
                       <p className="text-sm text-gray-800">{msg.content}</p>
                       {msg.audio_url && (
@@ -505,7 +505,7 @@ export default function InterviewRoom() {
 
             {isProcessing && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center rounded-lg">
-                <div className="bg-white p-8 rounded-lg shadow-xl">
+                <div className="page-glass p-8 shadow-xl">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
                   <p className="text-center mt-4 text-gray-600">Processing your response...</p>
                 </div>

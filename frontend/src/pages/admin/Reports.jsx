@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import AdminLayout from "../../components/admin/AdminLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
 import { getReports, generateReport } from "../../api/authApi"
 
 export default function Reports() {
@@ -51,15 +52,17 @@ export default function Reports() {
 
   return (
     <AdminLayout>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-800">Reports</h1>
-        <p className="text-gray-500 mt-1">{total} reports generated</p>
-      </div>
+      <PageHeader
+        eyebrow={PAGE_EYEBROWS.admin}
+        title="Reports"
+        count={total}
+        countLabel="reports generated"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
         {/* Generate report form */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 h-fit">
+        <div className="page-glass p-6 h-fit">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">
             Generate New Report
           </h2>
@@ -106,7 +109,7 @@ export default function Reports() {
               <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"/>
             </div>
           ) : reports.length === 0 ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center text-gray-400">
+            <div className="page-glass p-12 text-center text-gray-400">
               No reports yet. Generate your first report.
             </div>
           ) : (
@@ -114,7 +117,7 @@ export default function Reports() {
               {reports.map((report) => (
                 <div
                   key={report.report_id}
-                  className="bg-white rounded-xl border border-gray-200 p-5 cursor-pointer hover:border-blue-300 transition"
+                  className="page-glass p-5 cursor-pointer hover:border-blue-300 transition"
                   onClick={() => setSelected(
                     selected?.report_id === report.report_id ? null : report
                   )}
@@ -139,7 +142,7 @@ export default function Reports() {
                       <p className="text-xs font-medium text-gray-500 mb-2">
                         Report Content:
                       </p>
-                      <pre className="text-xs bg-gray-50 rounded-lg p-3 overflow-auto text-gray-700">
+                      <pre className="text-xs page-glass-inset rounded-lg p-3 overflow-auto text-gray-700">
                         {report.content}
                       </pre>
                     </div>

@@ -1,4 +1,35 @@
-export default function StatsCard({ title, value, color, icon }) {
+export default function StatsCard({ title, value, color, icon, variant }) {
+  const accentBar = {
+    blue: "bg-blue-500",
+    green: "bg-green-600",
+    emerald: "bg-emerald-600",
+    red: "bg-red-500",
+    rose: "bg-rose-500",
+    purple: "bg-purple-600",
+    indigo: "bg-indigo-500",
+    orange: "bg-orange-500",
+    amber: "bg-amber-500",
+    gray: "bg-slate-500",
+  }
+
+  if (variant === "glass") {
+    const bar = accentBar[color] || accentBar.blue
+    return (
+      <div className="group relative overflow-hidden rounded-[26px] border border-white/70 bg-white/55 p-6 shadow-[0_12px_40px_rgba(15,40,25,0.12)] backdrop-blur-xl transition duration-200 hover:border-white/90 hover:bg-white/68 hover:shadow-[0_18px_48px_rgba(15,40,25,0.16)]">
+        <div className={`absolute left-0 top-0 h-1 w-full ${bar} opacity-90`} aria-hidden />
+        <div className="flex items-start justify-between gap-4 pt-1">
+          <div className="min-w-0">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-green-900">{title}</p>
+            <p className="text-3xl font-black tabular-nums tracking-tight text-slate-900 sm:text-[2.35rem]">{value}</p>
+          </div>
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/85 text-2xl shadow-sm ring-1 ring-black/10">
+            {icon}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const colors = {
     blue: "from-blue-500/10 to-blue-500/5 border-blue-200 text-blue-700",
     green: "from-green-500/10 to-green-500/5 border-green-200 text-green-700",

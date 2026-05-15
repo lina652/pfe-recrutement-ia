@@ -1,28 +1,28 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
+import { useLanguage } from "../../context/LanguageContext"
 import API from "../../api/authApi"
+import LogoutConfirmDialog from "./LogoutConfirmDialog"
 
-export default function TopBar({ title, role }) {
+export default function TopBar({ title, role, roleLabel, showMenuButton, onMenuClick, onBarClick }) {
   const { user, logout } = useAuth()
+  const { lang } = useLanguage()
   const navigate = useNavigate()
   const [unreadCount, setUnreadCount] = useState(0)
-  const [showDropdown, setShowDropdown] = useState(false)
-  const [notifications, setNotifications] = useState([])
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
 
-  // The role determines where we fetch notifications from
   const fetchNotifications = async () => {
     try {
       let endpoint = ""
       if (role === "candidate") endpoint = "/candidate/notifications"
-      else if (role === "recruiter") endpoint = "/recruiter/notifications" // Assuming these exist or will exist
+      else if (role === "recruiter") endpoint = "/recruiter/notifications"
       else if (role === "manager") endpoint = "/manager/notifications"
-      else return // SuperAdmin/Admin might not have this specific notification system yet
+      else return
 
       if (!endpoint) return
 
       const res = await API.get(endpoint)
-      setNotifications(res.data.notifications?.slice(0, 5) || [])
       setUnreadCount(res.data.unread_count || 0)
     } catch (err) {
       console.error("Failed to fetch notifications", err)
@@ -34,39 +34,123 @@ export default function TopBar({ title, role }) {
     const handleRefresh = () => fetchNotifications()
     window.addEventListener(`${role}-notifications-updated`, handleRefresh)
     const interval = setInterval(fetchNotifications, 30000)
-    
+
     return () => {
       clearInterval(interval)
       window.removeEventListener(`${role}-notifications-updated`, handleRefresh)
     }
   }, [role])
 
-  const handleLogout = () => {
-    if (window.confirm("Are you sure you want to log out?")) {
-      logout()
-    }
+  const handleLogoutClick = () => setLogoutConfirmOpen(true)
+
+  const confirmLogout = async () => {
+    setLogoutConfirmOpen(false)
+    await logout()
   }
+
+  const logoutDialogCopy =
+    lang === "fr"
+      ? {
+          title: "Se déconnecter ?",
+          message: "Vous devrez vous reconnecter pour accéder à votre espace.",
+          confirmLabel: "Se déconnecter",
+          cancelLabel: "Annuler",
+        }
+      : lang === "ar"
+        ? {
+            title: "تسجيل الخروج؟",
+            message: "ستحتاج إلى تسجيل الدخول مجددًا للوصول إلى مساحة العمل.",
+            confirmLabel: "تسجيل الخروج",
+            cancelLabel: "إلغاء",
+          }
+        : {
+            title: "Sign out?",
+            message: "You will need to sign in again to access your workspace.",
+            confirmLabel: "Sign out",
+            cancelLabel: "Cancel",
+          }
 
   const handleBellClick = () => {
     navigate(`/${role}/notifications`)
   }
 
+  const displayRole = roleLabel || (typeof role === "string" ? role : "")
+
   return (
-    <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-gray-200 px-8 py-4 flex items-center justify-between shadow-sm">
-      <div className="flex items-center gap-4">
-        <h2 className="text-xl font-bold text-gray-800">{title || "Dashboard"}</h2>
+    <>
+      <LogoutConfirmDialog
+        open={logoutConfirmOpen}
+        onCancel={() => setLogoutConfirmOpen(false)}
+        onConfirm={confirmLogout}
+        title={logoutDialogCopy.title}
+        message={logoutDialogCopy.message}
+        confirmLabel={logoutDialogCopy.confirmLabel}
+        cancelLabel={logoutDialogCopy.cancelLabel}
+      />
+      <header
+        role="banner"
+        onClick={() => onBarClick?.()}
+        className={`sticky top-0 flex items-center justify-between border-b border-white/50 bg-white/55 px-4 py-4 shadow-[0_4px_20px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:px-8 ${onBarClick ? "z-[45]" : "z-40"}`}
+      >
+      <div className="flex items-center gap-3 sm:gap-4">
+        {showMenuButton && (
+          <>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onMenuClick?.()
+              }}
+              className="rounded-lg p-2 text-gray-700 transition hover:bg-white/25"
+              aria-label="Ouvrir le menu"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="cursor-pointer rounded-lg px-1 py-0.5 text-left transition hover:bg-white/20"
+              aria-label="TalentOs — Accueil"
+            >
+              <span
+                className="leading-none text-slate-900"
+                style={{
+                  fontFamily: "'Monotype Corsiva','Apple Chancery',cursive",
+                  fontSize: "26px",
+                }}
+              >
+                Talent<span style={{ color: "#f97316", fontWeight: 700 }}>Os</span>
+              </span>
+            </button>
+          </>
+        )}
+        {!showMenuButton && (
+          <h2 className="text-lg font-bold text-gray-800 sm:text-xl">{title || "Dashboard"}</h2>
+        )}
       </div>
 
-      <div className="flex items-center gap-6">
-        {/* Notification Bell */}
+      <div className="flex items-center gap-4 sm:gap-6">
         {role !== "admin" && role !== "superadmin" && (
           <div className="relative cursor-pointer" onClick={handleBellClick}>
-            <div className="p-2 rounded-full hover:bg-gray-100 transition relative">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            <div className="relative rounded-full p-2 transition hover:bg-white/25">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6 text-gray-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                />
               </svg>
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-white">
+                <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-white">
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
@@ -74,18 +158,20 @@ export default function TopBar({ title, role }) {
           </div>
         )}
 
-        <div className="h-6 w-px bg-gray-300"></div>
+        <div className="hidden h-6 w-px bg-gray-300 sm:block" />
 
-        {/* User Profile Summary */}
-        <div className="flex items-center gap-3">
-          <div className="text-right hidden md:block">
-            <p className="text-sm font-semibold text-gray-700">{user?.first_name} {user?.last_name}</p>
-            <p className="text-xs text-gray-500 capitalize">{role}</p>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="hidden text-right md:block">
+            <p className="text-sm font-semibold text-gray-700">
+              {user?.first_name} {user?.last_name}
+            </p>
+            <p className="text-xs capitalize text-gray-500">{displayRole}</p>
           </div>
-          
-          <button 
-            onClick={handleLogout}
-            className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors flex items-center justify-center"
+
+          <button
+            type="button"
+            onClick={handleLogoutClick}
+            className="flex items-center justify-center rounded-full p-2 text-red-500 transition-colors hover:bg-red-50"
             title="Logout"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -95,5 +181,6 @@ export default function TopBar({ title, role }) {
         </div>
       </div>
     </header>
+    </>
   )
 }

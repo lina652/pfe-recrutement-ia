@@ -1,5 +1,6 @@
 import { useState } from "react"
 import AdminLayout from "../../components/admin/AdminLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
 import { inviteStaff } from "../../api/authApi"
 
 export default function InviteStaff() {
@@ -31,14 +32,14 @@ export default function InviteStaff() {
 
   return (
     <AdminLayout>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-800">Invite Staff</h1>
-        <p className="text-gray-500 mt-1">
-          Send an invitation to a Recruiter or Hiring Manager
-        </p>
-      </div>
+      <PageHeader
+        eyebrow={PAGE_EYEBROWS.admin}
+        title="Invite Staff"
+        subtitle="Send an invitation to a Recruiter or Hiring Manager"
+        maxWidth="max-w-2xl"
+      />
 
-      <div className="max-w-lg bg-white rounded-xl border border-gray-200 p-8">
+      <div className="mx-auto w-full max-w-lg page-glass p-8">
 
         {success && (
           <div className="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">

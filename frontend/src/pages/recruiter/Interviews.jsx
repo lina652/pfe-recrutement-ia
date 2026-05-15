@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { useAuth } from "../../context/AuthContext"
 import RecruiterLayout from "../../components/recruiter/RecruiterLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
 import { getRecruiterInterviews, getInterviewDetail, getInterviewReport } from "../../api/authApi"
 import Toast from "../../components/Toast"
 
@@ -72,21 +73,22 @@ export default function Interviews() {
 
   return (
     <RecruiterLayout>
-      <div className="p-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">Interviews</h1>
-        <p className="text-gray-600 mb-8">
-          Manage and review candidate interviews
-        </p>
+      <div>
+        <PageHeader
+          eyebrow={PAGE_EYEBROWS.recruiter}
+          title="Interviews"
+          subtitle="Manage and review candidate interviews"
+        />
 
         {interviews.length === 0 ? (
-          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className="page-glass p-12 text-center">
             <p className="text-gray-500">No interviews yet</p>
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="page-glass overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b">
+                <thead className="page-glass-thead border-b border-white/40">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Candidate</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Job</th>
@@ -99,7 +101,7 @@ export default function Interviews() {
                 </thead>
                 <tbody className="divide-y">
                   {interviews.map((interview) => (
-                    <tr key={interview.interview_id} className="hover:bg-gray-50 transition">
+                    <tr key={interview.interview_id} className="hover:bg-white/25 transition">
                       <td className="px-6 py-4 text-sm text-gray-800 font-medium">{interview.candidate_id.substring(0, 8)}</td>
                       <td className="px-6 py-4 text-sm text-gray-800">{interview.job_id.substring(0, 8)}</td>
                       <td className="px-6 py-4">
@@ -133,7 +135,7 @@ export default function Interviews() {
         {/* Interview Detail Modal */}
         {showDetail && selectedInterview && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-96 overflow-y-auto">
+            <div className="page-glass shadow-xl max-w-2xl w-full max-h-96 overflow-y-auto">
               <div className="p-6 border-b flex justify-between items-center">
                 <h2 className="text-2xl font-bold">Interview Details</h2>
                 <button
@@ -170,24 +172,24 @@ export default function Interviews() {
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
                     <h3 className="font-bold text-lg mb-3">AI Report</h3>
                     <div className="grid grid-cols-4 gap-2 mb-4">
-                      <div className="text-center bg-white p-2 rounded">
+                      <div className="page-glass-inset rounded-xl p-2 text-center">
                         <p className="text-2xl font-bold text-blue-600">{report.overall_score}</p>
                         <p className="text-xs text-gray-600">Overall</p>
                       </div>
-                      <div className="text-center bg-white p-2 rounded">
+                      <div className="page-glass-inset rounded-xl p-2 text-center">
                         <p className="text-2xl font-bold text-green-600">{report.communication_score}</p>
                         <p className="text-xs text-gray-600">Communication</p>
                       </div>
-                      <div className="text-center bg-white p-2 rounded">
+                      <div className="page-glass-inset rounded-xl p-2 text-center">
                         <p className="text-2xl font-bold text-purple-600">{report.technical_score}</p>
                         <p className="text-xs text-gray-600">Technical</p>
                       </div>
-                      <div className="text-center bg-white p-2 rounded">
+                      <div className="page-glass-inset rounded-xl p-2 text-center">
                         <p className="text-2xl font-bold text-orange-600">{report.motivation_score}</p>
                         <p className="text-xs text-gray-600">Motivation</p>
                       </div>
                     </div>
-                    <div className="bg-white p-3 rounded">
+                    <div className="page-glass-inset rounded-xl p-3">
                       <p className="text-sm"><strong>Recommendation:</strong> {report.recommendation}</p>
                       {report.summary && (
                         <p className="text-sm mt-2"><strong>Summary:</strong> {report.summary}</p>

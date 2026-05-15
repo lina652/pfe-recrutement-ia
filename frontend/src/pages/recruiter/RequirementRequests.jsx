@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import RecruiterLayout from "../../components/recruiter/RecruiterLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
 import API from "../../api/authApi"
 
 const STATUS_BADGE = {
@@ -68,10 +69,11 @@ export default function RequirementRequests() {
 
   return (
     <RecruiterLayout>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Requirement Requests</h1>
-        <p className="text-gray-500 mt-1">Review manager requests and create jobs after approval</p>
-      </div>
+      <PageHeader
+        eyebrow={PAGE_EYEBROWS.recruiter}
+        title="Requirement Requests"
+        subtitle="Review manager requests and create jobs after approval"
+      />
 
       {/* Filter tabs */}
       <div className="flex gap-2 mb-5">
@@ -82,7 +84,7 @@ export default function RequirementRequests() {
             className={`px-4 py-1.5 rounded-full text-xs font-semibold transition ${
               filter === f
                 ? "bg-green-700 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                : "page-glass-pill text-gray-600 hover:bg-white/55"
             }`}
           >
             {f === "ALL" ? "All" : f.charAt(0) + f.slice(1).toLowerCase()}
@@ -106,7 +108,7 @@ export default function RequirementRequests() {
           <div className="w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : requests.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
+        <div className="page-glass p-16 text-center">
           <p className="text-4xl mb-3">📨</p>
           <p className="text-gray-400 text-sm">No requirement requests found</p>
         </div>
@@ -118,7 +120,7 @@ export default function RequirementRequests() {
             const isRejecting = rejectingId === req.request_id
 
             return (
-              <div key={req.request_id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <div key={req.request_id} className="page-glass p-5 shadow-sm">
                 {/* Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div>
@@ -137,7 +139,7 @@ export default function RequirementRequests() {
                 </div>
 
                 {/* Requirements details */}
-                  <div className="bg-gray-50 rounded-lg p-4 mb-3">
+                  <div className="page-glass-inset rounded-2xl p-4 mb-3">
                     {req.description && (
                       <p className="text-sm text-gray-700 mb-2">
                         <span className="font-medium">Description:</span> {req.description}

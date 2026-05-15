@@ -49,12 +49,22 @@ export default function JobDetail() {
 
       {/* ── NAVBAR ── */}
       <nav style={{
-        background:"linear-gradient(135deg,#7B5AC8 0%,#9683EC 50%,#B8A8F0 100%)",
+        background:"linear-gradient(135deg, rgba(91, 33, 182, 0.88) 0%, rgba(123, 90, 200, 0.82) 45%, rgba(150, 131, 236, 0.76) 100%)",
+        backdropFilter:"blur(16px)",
+        WebkitBackdropFilter:"blur(16px)",
+        borderBottom:"1px solid rgba(255,255,255,0.38)",
+        boxShadow:"0 4px 20px rgba(67, 29, 120, 0.35), inset 0 1px 0 rgba(255,255,255,0.2)",
         position:"fixed", top:0, left:0, right:0, zIndex:50,
         display:"flex", alignItems:"center", justifyContent:"space-between",
         padding:"14px 40px"
       }}>
-        <div onClick={() => navigate("/")} style={{ fontFamily:"'Monotype Corsiva','Apple Chancery',cursive", fontSize:"28px", color:"white", cursor:"pointer" }}>
+        <div onClick={() => navigate("/")} style={{
+          fontFamily:"'Monotype Corsiva','Apple Chancery',cursive",
+          fontSize:"28px",
+          color:"white",
+          cursor:"pointer",
+          textShadow:"0 1px 3px rgba(0,0,0,0.45), 0 0 18px rgba(123,90,200,0.35)",
+        }}>
           Talent<span style={{ color:"#f97316", fontWeight:700 }}>Os</span>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:"32px" }}>
@@ -64,7 +74,16 @@ export default function JobDetail() {
             { label:t.login, action:() => navigate("/login") },
           ].map((l, i) => (
             <span key={i} onClick={l.action}
-              style={{ color:"white", fontSize:"13px", fontWeight:600, letterSpacing:"2px", textTransform:"uppercase", cursor:"pointer", opacity:0.9 }}
+              style={{
+                color:"white",
+                fontSize:"13px",
+                fontWeight:600,
+                letterSpacing:"2px",
+                textTransform:"uppercase",
+                cursor:"pointer",
+                opacity:0.9,
+                textShadow:"0 1px 3px rgba(0,0,0,0.45), 0 0 14px rgba(123,90,200,0.3)",
+              }}
               onMouseOver={(e)=>e.target.style.opacity=0.6}
               onMouseOut={(e)=>e.target.style.opacity=0.9}
             >{l.label}</span>

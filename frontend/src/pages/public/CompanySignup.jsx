@@ -325,9 +325,19 @@ export default function CompanySignup() {
               letterSpacing:"1px",
               cursor: loading ? "not-allowed" : "pointer",
               opacity: loading ? 0.7 : 1,
-              marginBottom:"16px"
+              marginBottom:"16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "10px",
             }}
           >
+            {loading ? (
+              <span
+                className="inline-block h-[18px] w-[18px] shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                aria-hidden
+              />
+            ) : null}
             {loading ? t.creatingAccountBtn : t.createAccountBtn}
           </button>
 
@@ -436,9 +446,19 @@ export default function CompanySignup() {
             letterSpacing:"1px",
             cursor: otp.length !== 6 || loading ? "not-allowed" : "pointer",
             opacity: otp.length !== 6 || loading ? 0.6 : 1,
-            marginBottom:"16px"
+            marginBottom:"16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "10px",
           }}
         >
+          {loading ? (
+            <span
+              className="inline-block h-[18px] w-[18px] shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white"
+              aria-hidden
+            />
+          ) : null}
           {loading ? t.verifying : t.verifyActivate}
         </button>
 

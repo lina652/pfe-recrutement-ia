@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import ManagerLayout from "../../components/manager/ManagerLayout"
+import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
 import API from "../../api/authApi"
 
 const TYPE_STYLES = {
@@ -63,31 +64,32 @@ export default function ManagerNotifications() {
 
   return (
     <ManagerLayout>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Notifications</h1>
-          <p className="text-gray-500 mt-1">
-            {unreadCount > 0
-              ? `You have ${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}`
-              : "You're all caught up!"}
-          </p>
-        </div>
+      <PageHeader
+        eyebrow={PAGE_EYEBROWS.manager}
+        title="Notifications"
+        subtitle={
+          unreadCount > 0
+            ? `You have ${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}`
+            : "You're all caught up!"
+        }
+      >
         {unreadCount > 0 && (
           <button
+            type="button"
             onClick={markAllRead}
-            className="text-sm text-purple-600 hover:text-purple-800 font-medium transition"
+            className="rounded-xl bg-violet-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-800"
           >
             Mark all as read
           </button>
         )}
-      </div>
+      </PageHeader>
 
       {loading ? (
         <div className="flex justify-center mt-20">
           <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : notifications.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
+        <div className="page-glass p-16 text-center">
           <p className="text-4xl mb-3">🔔</p>
           <p className="text-gray-400 text-sm">No notifications yet</p>
         </div>
@@ -100,7 +102,7 @@ export default function ManagerNotifications() {
                 key={n.notification_id}
                 onClick={() => !n.is_read && markAsRead(n.notification_id)}
                 className={`
-                  bg-white rounded-xl border border-gray-200 p-4 border-l-4
+                  page-glass p-4 border-l-4
                   ${style.color}
                   ${!n.is_read ? "cursor-pointer hover:shadow-md" : "opacity-75"}
                   transition-all duration-200

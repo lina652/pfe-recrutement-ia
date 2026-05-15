@@ -2,17 +2,19 @@ import { NavLink, useNavigate } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
 import { useEffect, useState } from "react"
 import API from "../../api/authApi"
+import { dashboardGlassSidebarClass, sidebarGlassNavClass } from "../shared/dashboardSidebarShell"
+import { DashboardNavIcon } from "../shared/DashboardNavIcons"
 
 const links = [
-  { to: "/manager/dashboard", label: "Dashboard", icon: "📊" },
-  { to: "/manager/jobs", label: "Job Requirements", icon: "📝" },
-  { to: "/manager/shortlisted", label: "Shortlisted Candidates", icon: "⭐" },
-  { to: "/manager/selection", label: "Final Selection", icon: "✅" },
-  { to: "/manager/profile", label: "Edit Profile", icon: "✏️" },
+  { to: "/manager/dashboard", label: "Dashboard", icon: "dashboard", badge: true },
+  { to: "/manager/jobs", label: "Job Requirements", icon: "briefcase" },
+  { to: "/manager/shortlisted", label: "Shortlisted Candidates", icon: "star" },
+  { to: "/manager/selection", label: "Final Selection", icon: "checkCircle" },
+  { to: "/manager/profile", label: "Edit Profile", icon: "pencil" },
 ]
 
-export default function ManagerSidebar() {
-  const { user, logout } = useAuth()
+export default function ManagerSidebar({ open = false, onClose }) {
+  const { user } = useAuth()
   const navigate = useNavigate()
   const [unreadCount, setUnreadCount] = useState(0)
 
@@ -22,8 +24,8 @@ export default function ManagerSidebar() {
   useEffect(() => {
     const fetchUnread = () => {
       API.get("/manager/notifications/unread-count")
-        .then(res => setUnreadCount(res.data.unread_count))
-        .catch(() => { })
+        .then((res) => setUnreadCount(res.data.unread_count))
+        .catch(() => {})
     }
     const handleRefresh = () => fetchUnread()
     fetchUnread()
@@ -36,53 +38,54 @@ export default function ManagerSidebar() {
   }, [])
 
   return (
-    <aside className="w-64 min-h-screen bg-purple-900 text-white flex flex-col">
-      <div className="p-6 border-b border-purple-800">
-        <h1
-          onClick={() => navigate("/")}
-          style={{ fontFamily: "'Monotype Corsiva','Apple Chancery',cursive", fontSize: "24px", color: "white", marginBottom: "12px", cursor: "pointer" }}
-        >
-          Talent<span style={{ color: "#f97316" }}>Os</span>
-        </h1>
-        <p className="text-sm font-bold text-purple-100">{user?.company_name || "Hiring Manager Panel"}</p>
-      </div>
-
+    <aside className={dashboardGlassSidebarClass(open)} aria-hidden={!open}>
       <div
-        className="p-4 border-b border-purple-800 cursor-pointer hover:bg-purple-800 transition"
-        onClick={() => navigate("/manager/profile")}
+        className="cursor-pointer border-b border-white/30 px-5 py-4 transition hover:bg-white/20"
+        onClick={() => {
+          navigate("/manager/profile")
+          onClose?.()
+        }}
       >
         <div className="flex items-center gap-3">
-          <div style={{
-            width: 36, height: 36, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
-            background: avatar ? "transparent" : "#7c3aed",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontWeight: 700, fontSize: 13
-          }}>
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white ring-2 ring-white/60"
+            style={{
+              background: avatar ? "transparent" : "linear-gradient(135deg,#7c3aed,#5b21b6)",
+            }}
+          >
             {avatar ? (
-              <img src={avatar} alt="Avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            ) : initials}
+              <img src={avatar} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initials
+            )}
           </div>
-          <div>
-            <p className="text-sm font-medium">{user?.first_name} {user?.last_name}</p>
-            <p className="text-xs text-purple-300">Hiring Manager</p>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-900">
+              {user?.first_name} {user?.last_name}
+            </p>
+            <p className="text-xs font-medium text-emerald-900/70">Hiring manager</p>
+            {user?.company_name && (
+              <p className="mt-1 truncate text-xs font-semibold text-emerald-900/85" title={user.company_name}>
+                {user.company_name}
+              </p>
+            )}
           </div>
         </div>
       </div>
 
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-3">
         {links.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition ${isActive ? "bg-purple-700 text-white" : "text-purple-200 hover:bg-purple-800 hover:text-white"
-              }`
-            }
+            end={link.to === "/manager/dashboard"}
+            onClick={() => onClose?.()}
+            className={({ isActive }) => sidebarGlassNavClass(isActive)}
           >
-            <span>{link.icon}</span>
-            <span className="flex-1">{link.label}</span>
+            <DashboardNavIcon name={link.icon} className="h-5 w-5 shrink-0 opacity-90" />
+            <span className="flex-1 truncate">{link.label}</span>
             {link.badge && unreadCount > 0 && (
-              <span className="bg-red-500 text-white text-xs font-bold min-w-[20px] h-5 flex items-center justify-center rounded-full px-1.5">
+              <span className="flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}
@@ -90,10 +93,15 @@ export default function ManagerSidebar() {
         ))}
       </nav>
 
-      <div className="p-4 border-t border-purple-800">
-        <div className="px-4 py-2 text-xs text-purple-400 text-center">
-          TalentOs © 2026
-        </div>
+      <div className="border-t border-white/30 px-4 pt-3">
+        <button
+          type="button"
+          onClick={() => onClose?.()}
+          className="mb-2 w-full rounded-2xl border border-white/40 bg-white/30 py-2.5 text-sm font-semibold text-slate-800 backdrop-blur-sm transition hover:bg-white/45"
+        >
+          Fermer le menu
+        </button>
+        <p className="text-center text-[10px] font-medium text-emerald-900/60">TalentOs © 2026</p>
       </div>
     </aside>
   )
