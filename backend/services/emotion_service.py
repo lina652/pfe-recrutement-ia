@@ -134,6 +134,85 @@ class EmotionService:
                 "engagement": 0.0
             }
     
+    def analyze_facial_emotions(self, frame_paths: List[str]) -> Dict:
+        """Analyse rigoureuse : rejette frames noires, fiabilité du signal."""
+        emotions_sum = {e: 0.0 for e in self.emotions}
+        count = 0
+        rejected_black = 0
+        rejected_no_face = 0
+
+        for fp in frame_paths:
+            img = cv2.imread(fp)
+            if img is None:
+                continue
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            if gray.mean() < 15 or gray.std() < 5:
+                rejected_black += 1
+                continue
+            try:
+                result = DeepFace.analyze(
+                    img_path=fp,
+                    actions=["emotion"],
+                    enforce_detection=True,
+                    detector_backend="opencv",
+                    silent=True,
+                )
+                if isinstance(result, list):
+                    result = result[0]
+                for k, v in result.get("emotion", {}).items():
+                    if k in emotions_sum:
+                        emotions_sum[k] += float(v)
+                count += 1
+            except Exception:
+                rejected_no_face += 1
+
+        total = len(frame_paths)
+        if count == 0:
+            return {
+                "aggregate_emotions": {},
+                "emotion_distribution": {},
+                "dominant_emotion": "no_face_detected",
+                "engagement_score": 0.0,
+                "frames_analyzed": total,
+                "frames_with_face": 0,
+                "analyzed_frames": 0,
+                "rejected_black": rejected_black,
+                "rejected_no_face": rejected_no_face,
+                "signal_reliability": "low",
+                "dominant_confidence": 0.0,
+            }
+
+        avg = {k: round(float(v / count), 2) for k, v in emotions_sum.items()}
+        dominant = max(avg, key=avg.get)
+        dominant_pct = avg[dominant]
+        reliability = "high" if dominant_pct >= 50 else ("medium" if dominant_pct >= 35 else "low")
+
+        engagement_map = {
+            "happy": 1.0,
+            "surprise": 0.9,
+            "neutral": 0.5,
+            "sad": 0.2,
+            "fear": 0.1,
+            "angry": 0.0,
+            "disgust": 0.0,
+        }
+        engagement = engagement_map.get(dominant, 0.5)
+
+        norm_aggregate = {k: v / 100.0 for k, v in avg.items()}
+        return {
+            "aggregate_emotions": norm_aggregate,
+            "emotion_distribution": avg,
+            "dominant_emotion": dominant,
+            "engagement_score": engagement,
+            "frames_analyzed": total,
+            "frames_with_face": count,
+            "analyzed_frames": count,
+            "rejected_black": rejected_black,
+            "rejected_no_face": rejected_no_face,
+            "signal_reliability": reliability,
+            "dominant_confidence": dominant_pct,
+        }
+
     def analyze_frames(self, frame_paths: List[str]) -> Dict:
         """
         Analyze emotions across multiple frames and aggregate results.

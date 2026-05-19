@@ -1,10 +1,10 @@
 import { dashboardGlassClass } from "./DashboardOverviewKit"
-import hrIllustration from "../../assets/images/hr-human-resources.png"
+import hrIllustration from "../../assets/images/hr-human-resources.jpg"
 import hrIllustration2x from "../../assets/images/hr-human-resources@2x.png"
-import managerPortalHeader from "../../assets/images/manager-portal-header.png"
-import candidatePortalHeader from "../../assets/images/candidate-portal-header.png"
-import adminPortalHeader from "../../assets/images/admin-portal-header.png"
-import superAdminPortalHeader from "../../assets/images/superadmin-portal-header.png"
+import managerPortalHeader from "../../assets/images/manager-portal-header.jpg"
+import candidatePortalHeader from "../../assets/images/candidate-portal-header.jpg"
+import adminPortalHeader from "../../assets/images/admin-portal-header.jpg"
+import superAdminPortalHeader from "../../assets/images/superadmin-portal-header.jpg"
 
 /** Common eyebrow labels per role */
 export const PAGE_EYEBROWS = {
@@ -87,7 +87,7 @@ function portalImagePositionClass(eyebrow) {
 }
 
 const portalLeftOverlayClass = (eyebrow) =>
-  `pointer-events-none absolute inset-y-0 left-0 w-[min(100%,20rem)] bg-gradient-to-r ${
+  `pointer-events-none absolute inset-y-0 left-0 z-[1] w-[min(72%,18rem)] bg-gradient-to-r ${
     PORTAL_LEFT_GRADIENT[eyebrow] ?? PORTAL_LEFT_GRADIENT[PAGE_EYEBROWS.recruiter]
   } sm:w-[min(48%,28rem)]`
 
@@ -159,9 +159,7 @@ export default function PageHeader({
         srcSet={headerSrcSet}
         sizes={headerSrcSet ? "(max-width: 1280px) 100vw, 1152px" : undefined}
         alt=""
-        className={`absolute inset-0 h-full w-full object-cover ${portalImagePositionClass(eyebrow)}`}
-        style={{ transform: "translate3d(0,0,0)", backfaceVisibility: "hidden" }}
-        fetchPriority="high"
+        className={`absolute inset-0 z-0 h-full w-full object-cover ${portalImagePositionClass(eyebrow)}`}
         decoding="async"
         aria-hidden
       />

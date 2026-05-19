@@ -1,20 +1,49 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from typing import Optional
-import re
+
 from database import get_db
+from services.job_closing_service import sync_job_closings
 from models.job_offer import JobOffer
 from models.user import User, UserRole
 from models.candidate import Candidate
+from models.interview import Interview, InterviewStatus
 from core.dependencies import require_role
 from services.ocr_service import ocr_service
 from services.ner_service import ner_service
+from services.interview_scheduling import (
+    build_slots_payload,
+    apply_interview_schedule,
+    ensure_schedule_token,
+    get_interview_by_schedule_token,
+)
+from schemas.interview_schemas import SelectTimeSlotRequest, InterviewLanguageUpdate
 
 router = APIRouter(prefix="/public", tags=["Public"])
+
+
+def _sync_close_expired_jobs(db: Session) -> None:
+    """Hide expired jobs and trigger interview invites (notifications + email)."""
+    sync_job_closings(db, background=True)
+
+
+def _public_jobs_query(db: Session):
+    """Only jobs visible on the public careers page."""
+    _sync_close_expired_jobs(db)
+    return db.query(JobOffer).filter(JobOffer.is_active == True)
+
 
 # ─────────────────────────────
 # Helper — format job object
 # ─────────────────────────────
+
+def _enum_value(value):
+    if value is None:
+        return None
+    return value.value if hasattr(value, "value") else str(value)
+
 
 def format_job(j) -> dict:
     return {
@@ -22,19 +51,25 @@ def format_job(j) -> dict:
         "title": j.title,
         "description": j.description,
         "requirements": j.requirements,
-        "required_skills": j.required_skills.split(",") if j.required_skills else [],
+        "required_skills": _split_csv_skills(j.required_skills),
         "experience_years": getattr(j, "experience_years", None),
         "education_level": getattr(j, "education_level", None),
         "location": j.location,
-        "location_type": getattr(j, "location_type", None),
-        "contract_type": j.contract_type,
+        "location_type": _enum_value(getattr(j, "location_type", None)),
+        "contract_type": _enum_value(getattr(j, "contract_type", None)),
         "department": getattr(j, "department", None),
-        "experience_level": getattr(j, "experience_level", None),
+        "experience_level": _enum_value(getattr(j, "experience_level", None)),
+        "languages_required": _split_csv_skills(getattr(j, "languages_required", None)),
+        "languages_other": getattr(j, "languages_other", None),
+        "soft_skills": _split_csv_skills(getattr(j, "soft_skills", None)),
+        "soft_skills_other": getattr(j, "soft_skills_other", None),
+        "certifications": _split_csv_skills(getattr(j, "certifications", None)),
+        "certifications_other": getattr(j, "certifications_other", None),
         "salary_range": j.salary_range,
         "company_id": j.company_id,
         "company_name": j.company_name,
         "posted_date": j.posted_date,
-        "closing_date": j.closing_date
+        "closing_date": j.closing_date,
     }
 
 
@@ -42,99 +77,6 @@ def _split_csv_skills(value: Optional[str]) -> list[str]:
     if not value:
         return []
     return [s.strip() for s in value.split(",") if s and s.strip()]
-
-
-def _normalize_tokens(items: list[str]) -> set[str]:
-    tokens: set[str] = set()
-    for item in items:
-        for token in re.findall(r"[a-zA-Z0-9\+#\.]{2,}", (item or "").lower()):
-            tokens.add(token)
-    return tokens
-
-
-def _normalize_phrases(items: list[str]) -> list[str]:
-    """Normalize skills as lowercase phrases (preserve multi-word skills)."""
-    return [s.strip().lower() for s in items if s and s.strip()]
-
-
-def _phrase_match(cv_phrases: list[str], req_phrases: list[str]) -> tuple[set[str], set[str]]:
-    """Match required skill phrases against CV skill phrases.
-    Handles multi-word skills (e.g. 'machine learning') as units.
-    Returns (matched_set, missing_set)."""
-    matched = set()
-    missing = set()
-
-    cv_text = " | ".join(cv_phrases)  # join with separator for substring search
-
-    for req in req_phrases:
-        req_lower = req.lower().strip()
-        if not req_lower:
-            continue
-        found = False
-        # Exact phrase match first
-        for cv_skill in cv_phrases:
-            if req_lower == cv_skill or req_lower in cv_skill or cv_skill in req_lower:
-                found = True
-                break
-        # Fallback: check if all tokens of the required skill appear in CV skills
-        if not found:
-            req_tokens = set(re.findall(r"[a-zA-Z0-9\+#\.]{2,}", req_lower))
-            cv_all_tokens = _normalize_tokens(cv_phrases)
-            if req_tokens and req_tokens.issubset(cv_all_tokens):
-                found = True
-        if found:
-            matched.add(req_lower)
-        else:
-            missing.add(req_lower)
-    return matched, missing
-
-
-def _build_match_for_job(job: JobOffer, cv_skills: list[str], cv_text: str) -> tuple[float, str]:
-    required_skills = _split_csv_skills(getattr(job, "required_skills", None))
-
-    # Normalize both sides as phrases
-    cv_phrases = _normalize_phrases(cv_skills)
-    req_phrases = _normalize_phrases(required_skills)
-
-    # ── Skill score (phrase-level matching) ──
-    skill_score = 0.0
-    matched_required = set()
-    if req_phrases:
-        matched_required, missing = _phrase_match(cv_phrases, req_phrases)
-        skill_score = len(matched_required) / len(req_phrases)
-    elif cv_phrases:
-        # No required skills specified — partial credit
-        skill_score = 0.3
-
-    # ── Keyword bonus (title + description relevance) ──
-    # Only use job title + description tokens (not requirements/skills again)
-    job_title_desc_tokens = _normalize_tokens([
-        getattr(job, "title", "") or "",
-        getattr(job, "description", "") or "",
-    ])
-    cv_text_tokens = _normalize_tokens([cv_text])
-    keyword_bonus = 0.0
-    if job_title_desc_tokens:
-        overlap = len(job_title_desc_tokens.intersection(cv_text_tokens))
-        # Cap the keyword bonus to avoid inflating with long CVs
-        raw_ratio = overlap / len(job_title_desc_tokens)
-        keyword_bonus = min(raw_ratio, 0.5)  # cap at 50% of job tokens matched
-
-    # ── Final score ──
-    # Skills are the main signal (85%), keyword bonus is minor (15%)
-    overall = round(min((skill_score * 0.85) + (keyword_bonus * 0.15), 1.0), 3)
-
-    # ── Reason string ──
-    if req_phrases:
-        if matched_required:
-            reason = f"Matched {len(matched_required)}/{len(req_phrases)} required skills: {', '.join(sorted(matched_required)[:5])}."
-        else:
-            reason = "No required skills from this job were found in your CV."
-    else:
-        reason = "Job has no explicit required skills; ranking uses title and description relevance."
-
-    return overall, reason
-
 
 
 def _normalize_email(value: str) -> str:
@@ -194,7 +136,7 @@ def get_public_jobs(
     company_id: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    query = db.query(JobOffer).filter(JobOffer.is_active == True)
+    query = _public_jobs_query(db)
     query = _apply_job_filters(
         query=query,
         search=search,
@@ -229,11 +171,28 @@ def match_jobs_by_candidate_profile(
     current_user: User = Depends(require_role(UserRole.CANDIDATE))
 ):
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.user_id).first()
-    profile_skills = _split_csv_skills(candidate.skills if candidate else None)
-    if not profile_skills:
-        return {"total": 0, "jobs": [], "profile": {"name": f"{current_user.first_name} {current_user.last_name}".strip(), "email": current_user.email, "skills": []}}
+    if not candidate:
+        return {
+            "total": 0,
+            "jobs": [],
+            "profile": {
+                "name": f"{current_user.first_name} {current_user.last_name}".strip(),
+                "email": current_user.email,
+                "skills": [],
+            },
+        }
 
-    query = db.query(JobOffer).filter(JobOffer.is_active == True)
+    from services.cv_job_matching import (
+        cv_match_percentage,
+        format_match_reason,
+        load_parsed_cv,
+        match_parsed_cv_to_job,
+    )
+
+    parsed_cv = load_parsed_cv(db, candidate)
+    profile_skills = _split_csv_skills(candidate.skills if candidate else None)
+
+    query = _public_jobs_query(db)
     query = _apply_job_filters(
         query=query,
         search=search,
@@ -248,12 +207,11 @@ def match_jobs_by_candidate_profile(
 
     jobs = query.all()
     ranked = []
-    profile_text = " ".join(profile_skills)
     for job in jobs:
-        score, reason = _build_match_for_job(job, cv_skills=profile_skills, cv_text=profile_text)
+        result = match_parsed_cv_to_job(parsed_cv, job)
         item = format_job(job)
-        item["match_percentage"] = round(score * 100, 1)
-        item["match_reason"] = reason
+        item["match_percentage"] = cv_match_percentage(result)
+        item["match_reason"] = format_match_reason(result)
         ranked.append(item)
 
     ranked.sort(key=lambda x: x["match_percentage"], reverse=True)
@@ -305,7 +263,7 @@ async def match_jobs_by_cv(
     soft = skills_obj.get("soft", []) if isinstance(skills_obj, dict) else []
     cv_skills = [s.strip() for s in (technical + soft) if isinstance(s, str) and s.strip()]
 
-    query = db.query(JobOffer).filter(JobOffer.is_active == True)
+    query = _public_jobs_query(db)
     query = _apply_job_filters(
         query=query,
         search=search,
@@ -318,18 +276,27 @@ async def match_jobs_by_cv(
         company_id=company_id
     )
 
+    from services.cv_job_matching import (
+        cv_match_percentage,
+        format_match_reason,
+        match_parsed_cv_to_job,
+    )
+
     jobs = query.all()
     ranked = []
     for job in jobs:
-        score, reason = _build_match_for_job(job, cv_skills=cv_skills, cv_text=cv_text)
+        result = match_parsed_cv_to_job(parsed, job)
         item = format_job(job)
-        item["match_percentage"] = round(score * 100, 1)
-        item["match_reason"] = reason
+        item["match_percentage"] = cv_match_percentage(result)
+        item["match_reason"] = format_match_reason(result)
         ranked.append(item)
 
+    contact = parsed.get("contact", {}) if isinstance(parsed, dict) else {}
     extracted_email = _normalize_email(
-        ((parsed.get("contact") or {}).get("email") or "") if isinstance(parsed, dict) else ""
+        (contact.get("email") or "") if isinstance(contact, dict) else ""
     )
+    extracted_phone = (contact.get("phone") or "").strip() if isinstance(contact, dict) else ""
+    
     existing_user = None
     if extracted_email:
         existing_user = db.query(User).filter(User.email.ilike(extracted_email)).first()
@@ -342,6 +309,7 @@ async def match_jobs_by_cv(
         "cv": {
             "extracted_name": (parsed.get("name") or "").strip() if isinstance(parsed, dict) else "",
             "extracted_email": extracted_email,
+            "extracted_phone": extracted_phone,
             "account_exists": account_exists,
             "extracted_skills": cv_skills
         }
@@ -358,10 +326,7 @@ def get_job_detail(
     job_id: str,
     db: Session = Depends(get_db)
 ):
-    job = db.query(JobOffer).filter(
-        JobOffer.job_id == job_id,
-        JobOffer.is_active == True
-    ).first()
+    job = _public_jobs_query(db).filter(JobOffer.job_id == job_id).first()
 
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -379,31 +344,26 @@ def get_similar_jobs(
     job_id: str,
     db: Session = Depends(get_db)
 ):
-    # Get the current job
-    job = db.query(JobOffer).filter(
-        JobOffer.job_id == job_id,
-        JobOffer.is_active == True
-    ).first()
+    job = _public_jobs_query(db).filter(JobOffer.job_id == job_id).first()
 
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
     similar = []
+    base = _public_jobs_query(db)
 
     # Strategy 1 — same department
     if hasattr(job, "department") and job.department:
-        similar = db.query(JobOffer).filter(
+        similar = base.filter(
             JobOffer.job_id != job_id,
-            JobOffer.is_active == True,
             JobOffer.department == job.department
         ).limit(4).all()
 
     # Strategy 2 — same company if not enough results
     if len(similar) < 4:
         existing_ids = [j.job_id for j in similar] + [job_id]
-        more = db.query(JobOffer).filter(
+        more = base.filter(
             JobOffer.job_id.notin_(existing_ids),
-            JobOffer.is_active == True,
             JobOffer.company_id == job.company_id
         ).limit(4 - len(similar)).all()
         similar.extend(more)
@@ -411,9 +371,8 @@ def get_similar_jobs(
     # Strategy 3 — same contract type if still not enough
     if len(similar) < 4:
         existing_ids = [j.job_id for j in similar] + [job_id]
-        more = db.query(JobOffer).filter(
+        more = base.filter(
             JobOffer.job_id.notin_(existing_ids),
-            JobOffer.is_active == True,
             JobOffer.contract_type == job.contract_type
         ).limit(4 - len(similar)).all()
         similar.extend(more)
@@ -445,10 +404,12 @@ def get_company_jobs(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    jobs = db.query(JobOffer).filter(
-        JobOffer.company_id == company.company_id,
-        JobOffer.is_active == True
-    ).order_by(JobOffer.posted_date.desc()).all()
+    jobs = (
+        _public_jobs_query(db)
+        .filter(JobOffer.company_id == company.company_id)
+        .order_by(JobOffer.posted_date.desc())
+        .all()
+    )
 
     return {
         "company_id": company.company_id,
@@ -495,3 +456,103 @@ def get_filter_options(
             "Django", "PostgreSQL", "MongoDB", "Redis"
         ]
     }
+
+
+# ─────────────────────────────
+# Public interview scheduling (email magic link, no login)
+# ─────────────────────────────
+
+def _serialize_slots(payload: dict) -> list:
+    return [
+        {
+            "datetime": s["datetime"].isoformat(),
+            "formatted": s["formatted"],
+            "available": s["available"],
+        }
+        for s in payload["slots"]
+    ]
+
+
+@router.get("/interview/schedule")
+def get_public_interview_schedule(
+    token: str = Query(..., min_length=16),
+    db: Session = Depends(get_db),
+):
+    """Load interview time slots from email link (no authentication)."""
+    interview = get_interview_by_schedule_token(db, token)
+    if not interview:
+        raise HTTPException(status_code=404, detail="Invalid or expired scheduling link")
+    if interview.status == InterviewStatus.CANCELLED:
+        raise HTTPException(status_code=410, detail="This interview invitation is no longer active")
+
+    ensure_schedule_token(interview)
+    db.commit()
+
+    job = db.query(JobOffer).filter(JobOffer.job_id == interview.job_id).first()
+    job_title = job.title if job else "Unknown Position"
+    candidate = db.query(Candidate).filter(Candidate.candidate_id == interview.candidate_id).first()
+    user = db.query(User).filter(User.user_id == candidate.user_id).first() if candidate else None
+    candidate_name = f"{user.first_name} {user.last_name}".strip() if user else "Candidate"
+
+    payload = build_slots_payload(db, interview, job_title)
+    scheduled_at = payload["scheduled_at"]
+    return {
+        "interview_id": interview.interview_id,
+        "job_title": job_title,
+        "candidate_name": candidate_name,
+        "company_name": job.company_name if job else None,
+        "slots": _serialize_slots(payload),
+        "week_start": payload["week_start"].isoformat(),
+        "week_end": payload["week_end"].isoformat(),
+        "already_scheduled": payload["already_scheduled"],
+        "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
+        "meeting_link": interview.meeting_link,
+        "language": interview.language or "en",
+    }
+
+
+@router.patch("/interview/schedule/language")
+def patch_public_interview_language(
+    body: InterviewLanguageUpdate,
+    token: str = Query(..., min_length=16),
+    db: Session = Depends(get_db),
+):
+    """Set interview language from email link (no login)."""
+    interview = get_interview_by_schedule_token(db, token)
+    if not interview:
+        raise HTTPException(status_code=404, detail="Invalid or expired scheduling link")
+    if interview.status == InterviewStatus.CANCELLED:
+        raise HTTPException(status_code=410, detail="This interview invitation is no longer active")
+    if interview.status not in (InterviewStatus.INVITED,):
+        raise HTTPException(status_code=400, detail="Language can only be changed before the interview starts")
+
+    interview.language = body.language
+    db.commit()
+    return {"interview_id": interview.interview_id, "language": interview.language}
+
+
+@router.post("/interview/schedule")
+def submit_public_interview_schedule(
+    payload: SelectTimeSlotRequest,
+    token: str = Query(..., min_length=16),
+    db: Session = Depends(get_db),
+):
+    """Confirm interview time from email link; syncs to application and notifies recruiter."""
+    interview = get_interview_by_schedule_token(db, token)
+    if not interview:
+        raise HTTPException(status_code=404, detail="Invalid or expired scheduling link")
+    if interview.status == InterviewStatus.CANCELLED:
+        raise HTTPException(status_code=410, detail="This interview invitation is no longer active")
+    if interview.scheduled_at:
+        raise HTTPException(status_code=409, detail="Interview time was already scheduled")
+
+    try:
+        return apply_interview_schedule(
+            db,
+            interview,
+            payload.selected_datetime,
+            via_email=True,
+            language=payload.language,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

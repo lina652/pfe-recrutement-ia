@@ -3,14 +3,32 @@ import { useNavigate } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
 import CandidateLayout from "../../components/candidate/CandidateLayout"
 import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
-import { getCandidateInterviews, getInterviewScores, respondToCandidateInterview, getInterviewTimeSlots, selectInterviewTimeSlot } from "../../api/authApi"
+import {
+  getCandidateInterviews,
+  respondToCandidateInterview,
+  getInterviewTimeSlots,
+  selectInterviewTimeSlot,
+  updateInterviewLanguage,
+  getInterviewScores,
+  endInterview,
+} from "../../api/authApi"
 import Toast from "../../components/Toast"
+import InterviewScheduleCalendar from "../../components/shared/InterviewScheduleCalendar"
+import { canStartInterview, formatInterviewStartLabel, dayToScheduleIso } from "../../utils/interviewTime"
+
+function ClockIcon({ className = "w-4 h-4" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" strokeLinecap="round" />
+    </svg>
+  )
+}
 
 export default function CandidateInterviews() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [interviews, setInterviews] = useState([])
-  const [scores, setScores] = useState({})
   const [loading, setLoading] = useState(true)
   const [isResponding, setIsResponding] = useState(false)
   const [responseReasons, setResponseReasons] = useState({})
@@ -22,33 +40,35 @@ export default function CandidateInterviews() {
   const [timeSlots, setTimeSlots] = useState([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState(null)
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(null)
   const [submittingSlot, setSubmittingSlot] = useState(false)
+  const [interviewLanguages, setInterviewLanguages] = useState({})
+  const [savingLanguage, setSavingLanguage] = useState(null)
+  const [resultsModal, setResultsModal] = useState(null)
+  const [loadingResults, setLoadingResults] = useState(false)
+  const [endingId, setEndingId] = useState(null)
+
+  const [, setTick] = useState(0)
 
   useEffect(() => {
     loadInterviews()
   }, [])
 
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30000)
+    return () => clearInterval(id)
+  }, [])
+
   const loadInterviews = async () => {
     try {
       const result = await getCandidateInterviews()
-      setInterviews(result.data || [])
-
-      // Load scores for completed interviews
-      for (const interview of result.data || []) {
-        if (interview.status === "COMPLETED") {
-          try {
-            const scoreData = await getInterviewScores(interview.interview_id)
-            setScores(prev => ({
-              ...prev,
-              [interview.interview_id]: scoreData.data
-            }))
-          } catch (err) {
-            console.error("Could not load scores:", err)
-          }
-        }
-      }
+      const list = result.data || []
+      setInterviews(list)
+      setInterviewLanguages(
+        Object.fromEntries(list.map((i) => [i.interview_id, i.language || "en"]))
+      )
     } catch (err) {
-      setToast({ type: "error", message: "Failed to load interviews" })
+      // Silently fail without showing error toast
       console.error(err)
     } finally {
       setLoading(false)
@@ -63,14 +83,6 @@ export default function CandidateInterviews() {
       CANCELLED: "bg-red-100 text-red-800"
     }
     return badges[status] || "bg-gray-100 text-gray-800"
-  }
-
-  const getResponseBadge = (response) => {
-    const badges = {
-      ACCEPTED: "bg-green-100 text-green-800",
-      REFUSED: "bg-red-100 text-red-800"
-    }
-    return badges[response] || "bg-yellow-100 text-yellow-800"
   }
 
   const handleRespond = async (interviewId, action) => {
@@ -92,8 +104,62 @@ export default function CandidateInterviews() {
     }
   }
 
-  const handleStartInterview = (interviewId) => {
-    navigate(`/candidate/interview/${interviewId}`)
+  const handleEndSession = async (interview) => {
+    setEndingId(interview.interview_id)
+    try {
+      await endInterview(interview.interview_id)
+      await loadInterviews()
+      setToast({ type: "success", message: "Interview session closed. You can view results when ready." })
+      await openResults(interview.interview_id)
+    } catch (err) {
+      setToast({
+        type: "error",
+        message: err.response?.data?.detail || "Could not close interview session",
+      })
+    } finally {
+      setEndingId(null)
+    }
+  }
+
+  const openResults = async (interviewId) => {
+    setResultsModal({ interviewId, report: null, error: null })
+    setLoadingResults(true)
+    try {
+      const res = await getInterviewScores(interviewId)
+      setResultsModal({ interviewId, report: res.data, error: null })
+    } catch (err) {
+      setResultsModal({
+        interviewId,
+        report: null,
+        error: err.response?.data?.detail || "Results are not available yet",
+      })
+    } finally {
+      setLoadingResults(false)
+    }
+  }
+
+  const handleStartInterview = (interview) => {
+    if (!canStartInterview(interview.scheduled_at)) {
+      setToast({
+        type: "error",
+        message: `Interview available on ${formatInterviewStartLabel(interview.scheduled_at)}`,
+      })
+      return
+    }
+    navigate(`/candidate/interview/${interview.interview_id}`)
+  }
+
+  const handleLanguageChange = async (interviewId, language) => {
+    setInterviewLanguages((prev) => ({ ...prev, [interviewId]: language }))
+    setSavingLanguage(interviewId)
+    try {
+      await updateInterviewLanguage(interviewId, { language })
+    } catch (err) {
+      setToast({ type: "error", message: err.response?.data?.detail || "Failed to update language" })
+      loadInterviews()
+    } finally {
+      setSavingLanguage(null)
+    }
   }
 
   // Time slot functions
@@ -102,12 +168,13 @@ export default function CandidateInterviews() {
     setShowTimeSlotModal(true)
     setLoadingSlots(true)
     setSelectedSlot(null)
-    
+    setSelectedCalendarDate(null)
+
     try {
       const result = await getInterviewTimeSlots(interview.interview_id)
       setTimeSlots(result.data?.slots || [])
     } catch (err) {
-      setToast({ type: "error", message: "Failed to load time slots" })
+      setToast({ type: "error", message: "Failed to load available days" })
       console.error(err)
     } finally {
       setLoadingSlots(false)
@@ -119,35 +186,27 @@ export default function CandidateInterviews() {
     setSelectedInterview(null)
     setTimeSlots([])
     setSelectedSlot(null)
+    setSelectedCalendarDate(null)
   }
 
   const handleSelectTimeSlot = async () => {
-    if (!selectedSlot || !selectedInterview) return
-    
+    const day = selectedCalendarDate || (selectedSlot ? new Date(selectedSlot.datetime) : null)
+    if (!day || !selectedInterview) return
+
     setSubmittingSlot(true)
     try {
       await selectInterviewTimeSlot(selectedInterview.interview_id, {
-        selected_datetime: selectedSlot.datetime
+        selected_datetime: dayToScheduleIso(day),
+        language: interviewLanguages[selectedInterview.interview_id] || selectedInterview.language || "en",
       })
-      setToast({ type: "success", message: "Interview time confirmed! Check your email for details." })
+      setToast({ type: "success", message: "Interview day confirmed! Check your email for details." })
       closeTimeSlotModal()
       loadInterviews()
     } catch (err) {
-      setToast({ type: "error", message: err.response?.data?.detail || "Failed to select time slot" })
+      setToast({ type: "error", message: err.response?.data?.detail || "Failed to select interview day" })
     } finally {
       setSubmittingSlot(false)
     }
-  }
-
-  // Group time slots by date
-  const groupSlotsByDate = (slots) => {
-    const grouped = {}
-    slots.forEach(slot => {
-      const date = new Date(slot.datetime).toDateString()
-      if (!grouped[date]) grouped[date] = []
-      grouped[date].push(slot)
-    })
-    return grouped
   }
 
   if (loading) {
@@ -166,7 +225,7 @@ export default function CandidateInterviews() {
         <PageHeader
           eyebrow={PAGE_EYEBROWS.candidate}
           title="My Interviews"
-          subtitle="View your interview invitations and results"
+          subtitle="View your interview invitations and schedule"
         />
 
         {interviews.length === 0 ? (
@@ -178,115 +237,107 @@ export default function CandidateInterviews() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-6">
+          <div className="flex flex-col items-center gap-4">
             {interviews.map((interview) => (
-              <div key={interview.interview_id} className="page-glass p-6">
-                <div className="flex items-start justify-between mb-4">
+              <div
+                key={interview.interview_id}
+                className="page-glass p-4 w-full max-w-2xl mx-auto flex flex-col items-center text-center"
+              >
+                <div className="flex flex-col items-center gap-2 mb-3 w-full">
+                  <span className={`px-2.5 py-1 rounded-full font-semibold text-xs ${getStatusBadge(interview.status)}`}>
+                    {interview.status}
+                  </span>
                   <div>
-                    <h3 className="text-xl font-bold text-gray-800">
-                      {interview.job_title}
-                    </h3>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <h3 className="text-lg font-bold text-gray-800">{interview.job_title}</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
                       Created: {new Date(interview.created_at).toLocaleDateString()}
                     </p>
                   </div>
-                  <span className={`px-4 py-2 rounded-full font-semibold text-sm ${getStatusBadge(interview.status)}`}>
-                    {interview.status}
-                  </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4 mb-6">
-                  <div className="page-glass-inset p-3 rounded-xl">
-                    <p className="text-xs text-gray-600 font-semibold">Language</p>
-                    <p className="text-lg font-bold text-gray-800 mt-1">
-                      {interview.language === "en" ? "🇬🇧 English" : "🇫🇷 Français"}
-                    </p>
+                <div className="inline-flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mb-3 px-4 py-2 rounded-lg page-glass-inset mx-auto">
+                  <div className="flex flex-col items-center min-w-[4.5rem]">
+                    <span className="text-gray-500 text-xs">Language</span>
+                    {interview.status === "INVITED" ? (
+                      <select
+                        value={interviewLanguages[interview.interview_id] || interview.language || "en"}
+                        onChange={(e) => handleLanguageChange(interview.interview_id, e.target.value)}
+                        disabled={savingLanguage === interview.interview_id}
+                        className="text-sm font-semibold text-gray-800 bg-transparent border-0 p-0 text-center focus:outline-none focus:ring-0 cursor-pointer"
+                      >
+                        <option value="en">English</option>
+                        <option value="fr">Français</option>
+                      </select>
+                    ) : (
+                      <span className="text-sm font-semibold text-gray-800">
+                        {(interviewLanguages[interview.interview_id] || interview.language) === "en" ? "English" : "Français"}
+                      </span>
+                    )}
                   </div>
-                  <div className="page-glass-inset p-3 rounded-xl">
-                    <p className="text-xs text-gray-600 font-semibold">Phase</p>
-                    <p className="text-lg font-bold text-gray-800 mt-1 capitalize">
-                      {interview.phase}
-                    </p>
+                  <div className="flex flex-col items-center min-w-[4.5rem]">
+                    <span className="text-gray-500 text-xs">Phase</span>
+                    <span className="text-sm font-semibold text-gray-800 capitalize">{interview.phase}</span>
                   </div>
-                  <div className="page-glass-inset p-3 rounded-xl">
-                    <p className="text-xs text-gray-600 font-semibold">Turns</p>
-                    <p className="text-lg font-bold text-gray-800 mt-1">
-                      {interview.turn_count || 0}
-                    </p>
+                  <div className="flex flex-col items-center min-w-[4.5rem]">
+                    <span className="text-gray-500 text-xs">Turns</span>
+                    <span className="text-sm font-semibold text-gray-800">{interview.turn_count ?? 0}</span>
                   </div>
                 </div>
 
                 {interview.scheduled_at && (
-                  <div className="mb-4 text-sm text-gray-600">
-                    <span className="font-semibold">Scheduled:</span> {new Date(interview.scheduled_at).toLocaleString()}
+                  <div className="mb-3 text-sm text-gray-600">
+                    <span className="font-semibold">Scheduled:</span> {formatInterviewStartLabel(interview.scheduled_at)}
                   </div>
                 )}
 
-                {interview.candidate_response && (
-                  <div className={`mb-4 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold ${getResponseBadge(interview.candidate_response)}`}>
-                    <span>Response:</span>
-                    <span>{interview.candidate_response}</span>
+                {interview.candidate_response === "REFUSED" && (
+                  <div className="mb-3 inline-flex items-center justify-center gap-2 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800">
+                    Invitation declined
                   </div>
                 )}
 
-                {interview.candidate_response_reason && (
-                  <div className="mb-4 page-glass-inset rounded-xl p-3 text-sm text-gray-700 whitespace-pre-line">
+                {interview.candidate_response === "REFUSED" && interview.candidate_response_reason && (
+                  <div className="mb-3 page-glass-inset rounded-xl p-3 text-sm text-gray-700 whitespace-pre-line max-w-md mx-auto w-full">
                     <span className="font-semibold">Your message:</span> {interview.candidate_response_reason}
                   </div>
                 )}
 
-                {/* Scores if completed */}
-                {interview.status === "COMPLETED" && scores[interview.interview_id] && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-                    <p className="font-bold text-green-900 mb-3">Your Scores</p>
-                    <div className="grid grid-cols-4 gap-4">
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-green-600">
-                          {scores[interview.interview_id].overall_score || "-"}
-                        </p>
-                        <p className="text-xs text-green-700">Overall</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-blue-600">
-                          {scores[interview.interview_id].communication_score || "-"}/10
-                        </p>
-                        <p className="text-xs text-blue-700">Communication</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-purple-600">
-                          {scores[interview.interview_id].technical_score || "-"}/10
-                        </p>
-                        <p className="text-xs text-purple-700">Technical</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-orange-600">
-                          {scores[interview.interview_id].motivation_score || "-"}/10
-                        </p>
-                        <p className="text-xs text-orange-700">Motivation</p>
-                      </div>
-                    </div>
+                {interview.status === "COMPLETED" && (
+                  <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 max-w-md mx-auto w-full">
+                    <p className="font-semibold">Interview completed</p>
+                    <p className="mt-1 text-emerald-800">
+                      View your AI evaluation summary below.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => openResults(interview.interview_id)}
+                      className="mt-3 w-full rounded-lg bg-emerald-700 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+                    >
+                      View interview results
+                    </button>
                   </div>
                 )}
 
                 {/* Time Slot Selection for INVITED interviews without scheduled time */}
-                {interview.status === "INVITED" && !interview.candidate_response && !interview.scheduled_at && (
-                  <div className="mb-6 bg-purple-50 border border-purple-200 rounded-lg p-4">
-                    <p className="font-semibold text-purple-900 mb-2">🎉 Congratulations! Select Your Interview Time</p>
-                    <p className="text-sm text-purple-700 mb-3">
-                      You've been selected as a top candidate! Please choose your preferred interview time slot.
+                {interview.status === "INVITED" && !interview.scheduled_at && (
+                  <div className="mb-3 bg-purple-50 border border-purple-200 rounded-lg p-3 w-full max-w-md mx-auto">
+                    <p className="font-semibold text-purple-900 text-sm mb-1">Select your interview day</p>
+                    <p className="text-xs text-purple-700 mb-2">
+                      You have been shortlisted. Pick an interview day that works for you.
                     </p>
                     <button
                       onClick={() => openTimeSlotModal(interview)}
-                      className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors"
+                      className="w-full py-2 text-sm bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors inline-flex items-center justify-center gap-2"
                     >
-                      📅 Select Interview Time
+                      <ClockIcon className="w-5 h-5" />
+                      Select interview day
                     </button>
                   </div>
                 )}
 
                 {/* Inline Accept/Refuse for Pending Invitations with scheduled time */}
                 {interview.status === "INVITED" && !interview.candidate_response && interview.scheduled_at && (
-                  <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg p-4 w-full max-w-md mx-auto">
                     <p className="font-semibold text-blue-900 mb-2">Respond to Invitation</p>
                     <textarea
                       value={responseReasons[interview.interview_id] || ""}
@@ -314,41 +365,63 @@ export default function CandidateInterviews() {
                   </div>
                 )}
 
-                {/* Actions */}
-                <div className="flex gap-3">
-                  {interview.status === "INVITED" && interview.candidate_response === "ACCEPTED" && (
-                    <button
-                      onClick={() => handleStartInterview(interview.interview_id)}
-                      className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors"
-                    >
-                      ▶️ Start Interview
-                    </button>
-                  )}
-                  {interview.status === "INVITED" && !interview.candidate_response && (
-                    <button
-                      onClick={() => handleStartInterview(interview.interview_id)}
-                      className="flex-1 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition-colors"
-                    >
-                      View Details
-                    </button>
-                  )}
-                  {interview.status === "IN_PROGRESS" && (
-                    <button
-                      onClick={() => handleStartInterview(interview.interview_id)}
-                      className="flex-1 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-lg transition-colors"
-                    >
-                      ▶️ Resume Interview
-                    </button>
-                  )}
-                  {interview.status === "COMPLETED" && (
-                    <button
-                      onClick={() => handleStartInterview(interview.interview_id)}
-                      className="flex-1 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors"
-                    >
-                      View Interview
-                    </button>
-                  )}
+                {interview.status === "IN_PROGRESS" && (
+                  <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 max-w-md mx-auto w-full">
+                    <p className="font-semibold">Interview in progress</p>
+                    <p className="mt-1 text-amber-800">
+                      This session cannot be resumed or restarted. If you left the interview room, close the
+                      session below or refresh after a moment.
+                    </p>
+                    <div className="mt-3 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openResults(interview.interview_id)}
+                        className="w-full rounded-lg bg-emerald-700 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+                      >
+                        View interview results
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleEndSession(interview)}
+                        disabled={endingId === interview.interview_id}
+                        className="w-full rounded-lg border border-amber-300 bg-white/80 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+                      >
+                        {endingId === interview.interview_id
+                          ? "Closing session…"
+                          : "Close interview session"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {interview.status === "INVITED" && interview.candidate_response === "ACCEPTED" && (
+                <div className="flex flex-wrap justify-center gap-3 w-full max-w-md mx-auto">
+                  {(() => {
+                    const mayStart = canStartInterview(interview.scheduled_at)
+                    return (
+                      <div className="flex-1 min-w-[10rem]">
+                        <button
+                          type="button"
+                          onClick={() => handleStartInterview(interview)}
+                          disabled={!mayStart}
+                          className={`w-full py-2 font-bold rounded-lg transition-colors ${
+                            mayStart
+                              ? "bg-blue-600 hover:bg-blue-700 text-white"
+                              : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                          }`}
+                        >
+                          ▶️ Start Interview
+                        </button>
+                        {!mayStart && interview.scheduled_at && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            Available on {formatInterviewStartLabel(interview.scheduled_at)}
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
+                )}
               </div>
             ))}
           </div>
@@ -360,12 +433,15 @@ export default function CandidateInterviews() {
       {/* Time Slot Selection Modal */}
       {showTimeSlotModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="page-glass shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
+          <div className="page-glass shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
             {/* Header */}
             <div className="bg-gradient-to-r from-purple-600 to-purple-700 p-6 text-white">
-              <h2 className="text-2xl font-bold">📅 Select Your Interview Time</h2>
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <ClockIcon className="w-6 h-6" />
+                Select your interview day
+              </h2>
               <p className="text-purple-200 mt-1">
-                Choose a time slot that works best for you (next 7 days)
+                Pick a day on the calendar — you can start anytime that day
               </p>
             </div>
 
@@ -377,50 +453,35 @@ export default function CandidateInterviews() {
                 </div>
               ) : timeSlots.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
-                  No available time slots. Please try again later.
+                  No available days. Please try again later.
                 </div>
               ) : (
-                <div className="space-y-6">
-                  {Object.entries(groupSlotsByDate(timeSlots)).map(([date, slots]) => (
-                    <div key={date}>
-                      <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                        <span className="text-purple-600">📆</span>
-                        {new Date(date).toLocaleDateString('en-US', { 
-                          weekday: 'long', 
-                          month: 'long', 
-                          day: 'numeric' 
-                        })}
-                      </h3>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                        {slots.map((slot, idx) => {
-                          const time = new Date(slot.datetime).toLocaleTimeString('en-US', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: false
-                          })
-                          const isSelected = selectedSlot?.datetime === slot.datetime
-                          
-                          return (
-                            <button
-                              key={idx}
-                              onClick={() => slot.available && setSelectedSlot(slot)}
-                              disabled={!slot.available}
-                              className={`p-3 rounded-lg text-sm font-semibold transition-all ${
-                                !slot.available 
-                                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed line-through'
-                                  : isSelected
-                                    ? 'bg-purple-600 text-white ring-2 ring-purple-300'
-                                    : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200'
-                              }`}
-                            >
-                              {time}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <>
+                {selectedInterview && (
+                  <div className="mb-5 page-glass-inset rounded-xl p-4">
+                    <label className="mb-2 block text-sm font-semibold text-gray-800">
+                      Interview language
+                    </label>
+                    <select
+                      value={interviewLanguages[selectedInterview.interview_id] || "en"}
+                      onChange={(e) => handleLanguageChange(selectedInterview.interview_id, e.target.value)}
+                      disabled={savingLanguage === selectedInterview.interview_id}
+                      className="w-full max-w-xs rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm font-medium text-gray-900"
+                    >
+                      <option value="en">English</option>
+                      <option value="fr">Français</option>
+                    </select>
+                  </div>
+                )}
+                <InterviewScheduleCalendar
+                  slots={timeSlots}
+                  selectedDate={selectedCalendarDate}
+                  onSelectDate={setSelectedCalendarDate}
+                  selectedSlot={selectedSlot}
+                  onSelectSlot={setSelectedSlot}
+                  dayOnly
+                />
+                </>
               )}
             </div>
 
@@ -434,33 +495,77 @@ export default function CandidateInterviews() {
               </button>
               
               <div className="flex items-center gap-4">
-                {selectedSlot && (
+                {selectedCalendarDate && (
                   <span className="text-sm text-purple-700 font-medium">
-                    Selected: {new Date(selectedSlot.datetime).toLocaleString('en-US', {
-                      weekday: 'short',
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    Selected: {formatInterviewStartLabel(selectedCalendarDate)}
                   </span>
                 )}
                 <button
                   onClick={handleSelectTimeSlot}
-                  disabled={!selectedSlot || submittingSlot}
+                  disabled={!selectedCalendarDate || submittingSlot}
                   className={`px-8 py-3 rounded-lg font-bold transition-all ${
-                    selectedSlot && !submittingSlot
+                    selectedCalendarDate && !submittingSlot
                       ? 'bg-purple-600 hover:bg-purple-700 text-white'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
                 >
-                  {submittingSlot ? 'Confirming...' : '✓ Confirm Time'}
+                  {submittingSlot ? 'Confirming...' : '✓ Confirm day'}
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {resultsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-900/55 backdrop-blur-sm"
+            aria-label="Close"
+            onClick={() => setResultsModal(null)}
+          />
+          <div className="relative page-glass max-w-md w-full p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-gray-800 mb-4">Interview results</h3>
+            {loadingResults && <p className="text-sm text-gray-500">Loading…</p>}
+            {!loadingResults && resultsModal.error && (
+              <p className="text-sm text-amber-800">{resultsModal.error}</p>
+            )}
+            {!loadingResults && resultsModal.report && (
+              <div className="space-y-3 text-sm text-gray-700">
+                <p className="font-bold text-violet-900 text-base">
+                  Overall: {Math.round(resultsModal.report.overall_score)}%
+                </p>
+                <p>
+                  Communication {resultsModal.report.communication_score}/10 · Technical{" "}
+                  {resultsModal.report.technical_score}/10 · Motivation{" "}
+                  {resultsModal.report.motivation_score}/10
+                </p>
+                {resultsModal.report.summary && <p>{resultsModal.report.summary}</p>}
+                {resultsModal.report.strengths?.length > 0 && (
+                  <ul className="list-disc pl-4 text-xs">
+                    {resultsModal.report.strengths.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setResultsModal(null)}
+              className="mt-6 w-full rounded-lg bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </CandidateLayout>
   )
 }
+
+
+
+
+

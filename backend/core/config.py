@@ -22,15 +22,20 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
     EMBEDDING_DIM: int = 384
 
-    # 4. Interview Bot Config (NEW)
+    # 4. Interview Bot Config
     INTERVIEW_MAX_TURNS: int = 12
     INTERVIEW_MEDIA_DIR: str = "interview_media"
     INTERVIEW_MAX_FILE_SIZE_MB: int = 100
+    INTERVIEW_TESTING_MODE: bool = False
     GROQ_STT_MODEL: str = "whisper-large-v3-turbo"
-    GROQ_LLM_MODEL: str = "mixtral-8x7b-32768"
+    GROQ_LLM_MODEL: str = "llama-3.3-70b-versatile"
+    # STT: prompt neutre anti-hallucination (voir stt_antihallucination.py)
+    GROQ_STT_PROMPT: str = "Bonjour. Oui. Merci."
+    # Sentiment texte du candidat (transformers, chargement lazy)
+    INTERVIEW_TEXT_SENTIMENT_ENABLED: bool = True
+    INTERVIEW_SENTIMENT_MODEL: str = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
     
     # RAG Settings
-    GROQ_LLM_MODEL: str = "llama-3.3-70b-versatile"
     RAG_CHUNK_SIZE: int = 1000
     RAG_CHUNK_OVERLAP: int = 200
     RAG_COLLECTION_PREFIX: str = "recruitment"

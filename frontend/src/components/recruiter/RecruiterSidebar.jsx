@@ -9,9 +9,6 @@ const links = [
   { to: "/recruiter/dashboard", label: "Dashboard", icon: "dashboard" },
   { to: "/recruiter/jobs", label: "Job Offers", icon: "briefcase" },
   { to: "/recruiter/requirements", label: "Requirement Requests", icon: "inbox", badge: true, badgeKey: "requests" },
-  { to: "/recruiter/applications", label: "Applications", icon: "clipboardList" },
-  { to: "/recruiter/interviews", label: "Interviews", icon: "microphone" },
-  { to: "/recruiter/ai", label: "AI Recommendations", icon: "cpu" },
   { to: "/recruiter/profile", label: "Edit Profile", icon: "pencil" },
 ]
 

@@ -2,11 +2,25 @@ import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import CandidateLayout from "../../components/candidate/CandidateLayout"
 import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
-import API, { getCandidateNotifications, markCandidateNotificationRead } from "../../api/authApi"
+import NotificationPageActions from "../../components/shared/NotificationPageActions"
+import { getCandidateNotifications, markCandidateNotificationRead, clearCandidateNotifications } from "../../api/authApi"
 
 const TYPE_STYLES = {
+  INTERVIEW_TIME_SELECTION: {
+    icon: "📅",
+    color: "border-l-4 border-l-violet-500 bg-gradient-to-r from-violet-50 to-transparent hover:bg-violet-50",
+  },
   INTERVIEW_INVITED: { icon: "🎯", color: "border-l-4 border-l-blue-500 bg-gradient-to-r from-blue-50 to-transparent hover:bg-blue-50" },
-  INTERVIEW_INVITE_SENT: { icon: "📤", color: "border-l-4 border-l-emerald-500 bg-gradient-to-r from-emerald-50 to-transparent hover:bg-emerald-50" }
+  INTERVIEW_INVITE_SENT: { icon: "📤", color: "border-l-4 border-l-emerald-500 bg-gradient-to-r from-emerald-50/80 to-transparent hover:bg-emerald-50" },
+  APPLICATION_RECEIVED: { icon: "✅", color: "border-l-4 border-l-emerald-400 bg-gradient-to-r from-emerald-50/50 to-transparent" },
+  APPLICATION_ACCEPTED: {
+    icon: "🎉",
+    color: "border-l-4 border-l-green-600 bg-gradient-to-r from-green-50 to-transparent hover:bg-green-50",
+  },
+  APPLICATION_REJECTED: {
+    icon: "📋",
+    color: "border-l-4 border-l-gray-400 bg-gradient-to-r from-gray-50 to-transparent hover:bg-gray-50",
+  },
 }
 
 export default function CandidateNotifications() {
@@ -14,6 +28,7 @@ export default function CandidateNotifications() {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [clearing, setClearing] = useState(false)
 
   const fetchNotifications = async () => {
     try {
@@ -46,8 +61,31 @@ export default function CandidateNotifications() {
       await markAsRead(notification.notification_id)
     }
     // Navigate to interview page if it's an interview invitation
+    if (notification.type === "INTERVIEW_TIME_SELECTION") {
+      navigate("/candidate/interviews")
+      return
+    }
     if (notification.type === "INTERVIEW_INVITED" && notification.reference_id) {
       navigate(`/candidate/interview/${notification.reference_id}`)
+      return
+    }
+    if (notification.type === "APPLICATION_ACCEPTED" || notification.type === "APPLICATION_REJECTED") {
+      navigate("/candidate/applications")
+    }
+  }
+
+  const clearAll = async () => {
+    if (!notifications.length || clearing) return
+    setClearing(true)
+    try {
+      await clearCandidateNotifications()
+      setNotifications([])
+      setUnreadCount(0)
+      window.dispatchEvent(new Event("candidate-notifications-updated"))
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setClearing(false)
     }
   }
 
@@ -82,17 +120,18 @@ export default function CandidateNotifications() {
             ? `You have ${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}`
             : "You're all caught up!"
         }
-      >
-        {unreadCount > 0 && (
-          <button
-            type="button"
-            onClick={markAllRead}
-            className="rounded-xl bg-violet-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-800"
-          >
-            Mark all as read
-          </button>
-        )}
-      </PageHeader>
+      />
+
+      <div className="mx-auto mb-4 flex max-w-6xl justify-end">
+        <NotificationPageActions
+          unreadCount={unreadCount}
+          totalCount={notifications.length}
+          onMarkAllRead={markAllRead}
+          onClearAll={clearAll}
+          clearing={clearing}
+          accent="blue"
+        />
+      </div>
 
       {loading ? (
         <div className="flex justify-center items-center mt-20">
@@ -105,13 +144,17 @@ export default function CandidateNotifications() {
         <div className="page-glass p-16 text-center">
           <p className="text-6xl mb-4">🔔</p>
           <p className="text-lg font-semibold text-gray-600 mb-2">No notifications yet</p>
-          <p className="text-sm text-gray-400">Check back later for interview invitations and updates</p>
+          <p className="text-sm text-gray-400">Check back later for interview invitations, selection results, and updates</p>
         </div>
       ) : (
         <div className="space-y-3">
           {notifications.map((n) => {
             const style = TYPE_STYLES[n.type] || { icon: "🔔", color: "border-l-4 border-l-gray-400" }
-            const isClickable = n.type === "INTERVIEW_INVITED"
+            const isClickable =
+              n.type === "INTERVIEW_INVITED" ||
+              n.type === "INTERVIEW_TIME_SELECTION" ||
+              n.type === "APPLICATION_ACCEPTED" ||
+              n.type === "APPLICATION_REJECTED"
             return (
               <div 
                 key={n.notification_id} 
@@ -133,8 +176,19 @@ export default function CandidateNotifications() {
                         {!n.is_read && <span className="w-2.5 h-2.5 bg-blue-600 rounded-full flex-shrink-0 animate-pulse" />}
                       </div>
                       <p className="text-sm text-gray-600 leading-relaxed">{n.message}</p>
+                      {n.type === "INTERVIEW_TIME_SELECTION" && (
+                        <p className="text-xs text-violet-700 font-semibold mt-2">
+                          Click to choose your interview time slot
+                        </p>
+                      )}
                       {n.type === "INTERVIEW_INVITED" && (
-                        <p className="text-xs text-blue-600 font-semibold mt-2">💡 Click to confirm or decline the interview</p>
+                        <p className="text-xs text-blue-600 font-semibold mt-2">Click to confirm or decline the interview</p>
+                      )}
+                      {n.type === "APPLICATION_ACCEPTED" && (
+                        <p className="text-xs text-green-700 font-semibold mt-2">Click to view your application status</p>
+                      )}
+                      {n.type === "APPLICATION_REJECTED" && (
+                        <p className="text-xs text-gray-600 font-semibold mt-2">Click to view your applications</p>
                       )}
                     </div>
                   </div>

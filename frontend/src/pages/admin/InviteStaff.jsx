@@ -21,7 +21,11 @@ export default function InviteStaff() {
     setSuccess("")
     try {
       const res = await inviteStaff(form)
-      setSuccess(res.data.message)
+      setSuccess(
+        res.data.email_sent
+          ? `Invitation email sent to ${form.email}`
+          : res.data.message || "Invitation created"
+      )
       setForm({ first_name: "", last_name: "", email: "", role: "RECRUITER" })
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to send invitation")
@@ -114,9 +118,8 @@ export default function InviteStaff() {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
             <p className="font-medium mb-1">What happens next?</p>
             <p>
-              An invitation link will be generated.
-              The staff member uses it to set their password
-              and activate their account.
+              An invitation email will be sent via SMTP (e.g. Mailtrap).
+              The staff member clicks the link to set a password and activate their account.
               The link expires in 3 days.
             </p>
           </div>

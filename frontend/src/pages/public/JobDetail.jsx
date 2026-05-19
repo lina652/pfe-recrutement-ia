@@ -1,16 +1,57 @@
 import { useEffect, useState } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useParams, useNavigate, useLocation } from "react-router-dom"
 import { useLanguage } from "../../context/LanguageContext"
 import { getPublicJobDetail, getSimilarJobs } from "../../api/authApi"
+import ApplyJobModal from "../../components/public/ApplyJobModal"
+
+function formatEnumLabel(value) {
+  if (!value) return null
+  return String(value)
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function ChipSection({ title, icon, items, other }) {
+  if ((!items || items.length === 0) && !other) return null
+  return (
+    <div style={{ background: "white", borderRadius: 16, border: "1px solid #f3f4f6", padding: 28, marginBottom: 20, boxShadow: "0 2px 12px rgba(0,0,0,0.04)" }}>
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+        {icon} {title}
+      </h2>
+      {items?.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {items.map((item, i) => (
+            <span key={i} style={{ background: "#f5f3ff", color: "#7B5AC8", padding: "6px 16px", borderRadius: 20, fontSize: 13, fontWeight: 600 }}>
+              {item}
+            </span>
+          ))}
+        </div>
+      )}
+      {other ? (
+        <p style={{ color: "#4b5563", fontSize: 14, lineHeight: 1.7, marginTop: items?.length ? 12 : 0 }}>{other}</p>
+      ) : null}
+    </div>
+  )
+}
 
 export default function JobDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { lang, setLang, t, isRTL } = useLanguage()
   const [job, setJob] = useState(null)
   const [loading, setLoading] = useState(true)
   const [similarJobs, setSimilarJobs] = useState([])
   const [showLangPopup, setShowLangPopup] = useState(false)
+  const [applyOpen, setApplyOpen] = useState(Boolean(location.state?.openApply))
+
+  useEffect(() => {
+    if (location.state?.openApply) {
+      setApplyOpen(true)
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location.state?.openApply, location.pathname, navigate])
 
   useEffect(() => {
     setLoading(true)
@@ -46,6 +87,13 @@ export default function JobDetail() {
 
   return (
     <div className="min-h-screen" style={{ direction:isRTL?"rtl":"ltr", paddingBottom:80 }}>
+      <ApplyJobModal
+        jobId={id}
+        jobTitle={job?.title}
+        open={applyOpen}
+        onClose={() => setApplyOpen(false)}
+        prefilledFile={location.state?.prefilledFile}
+      />
 
       {/* ── NAVBAR ── */}
       <nav style={{
@@ -163,21 +211,10 @@ export default function JobDetail() {
               </div>
             )}
 
-            {/* Skills */}
-            {job.required_skills?.length > 0 && (
-              <div style={{ background:"white", borderRadius:16, border:"1px solid #f3f4f6", padding:28, marginBottom:20, boxShadow:"0 2px 12px rgba(0,0,0,0.04)" }}>
-                <h2 style={{ fontSize:20, fontWeight:700, color:"#111827", marginBottom:16, display:"flex", alignItems:"center", gap:8 }}>
-                  🔧 {t.requiredSkills}
-                </h2>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-                  {job.required_skills.map((s, i) => (
-                    <span key={i} style={{ background:"#f5f3ff", color:"#7B5AC8", padding:"6px 16px", borderRadius:20, fontSize:13, fontWeight:600 }}>
-                      {s.trim()}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+            <ChipSection title={t.requiredSkills} icon="🔧" items={job.required_skills} />
+            <ChipSection title={t.softSkills} icon="💡" items={job.soft_skills} other={job.soft_skills_other} />
+            <ChipSection title={t.languages} icon="🌐" items={job.languages_required} other={job.languages_other} />
+            <ChipSection title={t.certifications} icon="🏅" items={job.certifications} other={job.certifications_other} />
           </div>
 
           {/* Right Column — Details */}
@@ -188,14 +225,16 @@ export default function JobDetail() {
               </h2>
               <div style={{ display:"grid", gap:16 }}>
                 {[
-                  { icon:"📋", label:t.contract, value:job.contract_type },
-                  { icon:"📍", label:t.locationType, value:job.location_type || "—" },
+                  { icon:"📋", label:t.contract, value:formatEnumLabel(job.contract_type) || "—" },
+                  { icon:"📍", label:t.location, value:job.location || "—" },
+                  { icon:"🏠", label:t.locationType, value:formatEnumLabel(job.location_type) || "—" },
                   { icon:"🏢", label:t.department, value:job.department || "—" },
-                  { icon:"📊", label:t.level, value:job.experience_level || "—" },
+                  { icon:"📊", label:t.level, value:formatEnumLabel(job.experience_level) || "—" },
                   { icon:"⏱️", label:t.experience, value:job.experience_years ? `${job.experience_years} ${t.years}` : "—" },
                   { icon:"🎓", label:t.education, value:job.education_level || "—" },
                   { icon:"💰", label:t.salary, value:job.salary_range || "—" },
                   { icon:"📅", label:t.postedDate, value:new Date(job.posted_date).toLocaleDateString() },
+                  { icon:"⏳", label:t.closingDate, value:job.closing_date ? new Date(job.closing_date).toLocaleString() : "—" },
                 ].map((d, i) => (
                   <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:"1px solid #f9fafb", paddingBottom:12 }}>
                     <span style={{ fontSize:13, color:"#6b7280" }}>{d.icon} {d.label}</span>
@@ -204,7 +243,7 @@ export default function JobDetail() {
                 ))}
               </div>
 
-              <button onClick={() => navigate(`/jobs/${id}/apply`)} style={{
+              <button onClick={() => setApplyOpen(true)} style={{
                 width:"100%", marginTop:24,
                 background:"linear-gradient(135deg,#7B5AC8,#9683EC)", color:"white",
                 border:"none", padding:"14px 0", borderRadius:10,
@@ -258,7 +297,7 @@ export default function JobDetail() {
           <p style={{ fontSize:16, fontWeight:700, color:"#111827" }}>{job.title}</p>
           <p style={{ fontSize:13, color:"#7B5AC8", fontWeight:600 }}>{job.company_name}</p>
         </div>
-        <button onClick={() => navigate(`/jobs/${id}/apply`)} style={{
+        <button onClick={() => setApplyOpen(true)} style={{
           background:"linear-gradient(135deg,#7B5AC8,#9683EC)", color:"white",
           border:"none", padding:"12px 32px", borderRadius:10,
           fontSize:14, fontWeight:700, cursor:"pointer",

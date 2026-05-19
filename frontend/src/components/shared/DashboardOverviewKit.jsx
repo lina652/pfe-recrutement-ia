@@ -33,6 +33,58 @@ export function MiniDonut({ valuePct, color, label, sub }) {
   )
 }
 
+/** Horizontal stacked bar for role share (e.g. recruiters vs hiring managers). */
+export function RoleMixBar({ title, subtitle, segments }) {
+  const total = segments.reduce((sum, s) => sum + (s.count ?? 0), 0)
+  if (total <= 0) {
+    return (
+      <div className="w-full rounded-2xl border border-white/60 bg-white/40 px-4 py-3 text-center">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{title}</p>
+        <p className="mt-2 text-[11px] font-medium text-slate-500">No recruiters or hiring managers yet</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-full rounded-2xl border border-white/60 bg-white/40 px-4 py-3">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{title}</p>
+      {subtitle ? (
+        <p className="mt-0.5 text-[10px] font-medium text-slate-500">{subtitle}</p>
+      ) : null}
+      <div
+        className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-slate-200/80 ring-1 ring-white/60"
+        role="img"
+        aria-label={segments.map((s) => `${s.label} ${pct(s.count, total)}%`).join(", ")}
+      >
+        {segments.map((s) => {
+          const width = pct(s.count, total)
+          if (width <= 0) return null
+          return (
+            <div
+              key={s.label}
+              className="h-full shrink-0 transition-[width] duration-500"
+              style={{ width: `${width}%`, backgroundColor: s.color }}
+              title={`${s.label}: ${width}%`}
+            />
+          )
+        })}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+        {segments.map((s) => (
+          <div key={s.label} className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+            <span className="text-[11px] font-semibold text-slate-800">{s.label}</span>
+            <span className="text-[11px] font-black tabular-nums text-slate-900">
+              {pct(s.count, total)}%
+            </span>
+            <span className="text-[10px] font-medium text-slate-500">({s.count})</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function DetailLink({ to, children = "Detail" }) {
   return (
     <Link
@@ -48,8 +100,7 @@ export function DashboardOverviewHero({ title, subtitle }) {
   return (
     <div className="relative mb-8 min-h-[11rem] w-full overflow-hidden rounded-[28px] border border-white/20 bg-black shadow-[0_20px_50px_rgba(0,0,0,0.35)] sm:min-h-[13rem]">
       <video
-        className="absolute inset-0 h-full w-full object-cover"
-        style={{ transform: "translate3d(0,0,0)", backfaceVisibility: "hidden" }}
+        className="absolute inset-0 z-0 h-full w-full object-cover"
         autoPlay
         muted
         loop
@@ -58,7 +109,7 @@ export function DashboardOverviewHero({ title, subtitle }) {
         src={DASHBOARD_OVERVIEW_VIDEO}
       />
       <div
-        className="pointer-events-none absolute inset-y-0 left-0 w-[min(100%,28rem)] bg-gradient-to-r from-black/78 via-black/45 to-transparent sm:w-[min(100%,34rem)]"
+        className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-[min(72%,20rem)] bg-gradient-to-r from-black/78 via-black/45 to-transparent sm:w-[min(100%,34rem)]"
         aria-hidden
       />
       <div className="relative z-10 flex min-h-[11rem] flex-col justify-center px-6 py-8 sm:min-h-[13rem] sm:px-10">

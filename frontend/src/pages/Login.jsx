@@ -40,7 +40,12 @@ export default function Login() {
           // keep login successful even if already applied
         }
       }
-      navigate(ROLE_REDIRECT[tokens.role] || "/")
+      const redirectTo = location.state?.redirectTo
+      if (redirectTo && tokens.role === "CANDIDATE" && redirectTo.startsWith("/candidate/")) {
+        navigate(redirectTo, { replace: true })
+      } else {
+        navigate(ROLE_REDIRECT[tokens.role] || "/")
+      }
     } catch (err) {
       setError(err.response?.data?.detail || "Login failed")
     } finally {

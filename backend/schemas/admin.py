@@ -32,6 +32,12 @@ class InviteResponse(BaseModel):
     email: str
     role: StaffRole
     expires_at: datetime
+    email_sent: bool = False
+
+
+class SetPasswordRequest(BaseModel):
+    token: str
+    password: str
 
 # ─────────────────────────────
 # User Management
@@ -126,5 +132,8 @@ class DashboardStats(BaseModel):
     total_admins: int
     active_users: int
     inactive_users: int
+    total_staff: int
+    active_staff: int
+    inactive_staff: int
     total_logs: int
     total_reports: int

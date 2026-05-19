@@ -46,14 +46,14 @@ export default function SystemLogs() {
         countLabel="actions recorded"
       />
 
-      {/* Search */}
-      <div className="mb-6">
+      <div className="mb-6 max-w-xl">
         <input
           type="text"
           placeholder="Search by action or email..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-md border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label="Search logs by action or email"
+          className="page-glass-input w-full rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-200/50"
         />
       </div>
 

@@ -103,14 +103,14 @@ export default function RecruiterDashboard() {
               </div>
             </div>
             <div className="mt-4 flex justify-end">
-              <DetailLink to="/recruiter/applications">Applications</DetailLink>
+              <DetailLink to="/recruiter/jobs">Job offers</DetailLink>
             </div>
           </section>
 
           <section className={glass}>
             <div className="mb-4 flex items-start justify-between gap-2">
               <h2 className="text-[15px] font-bold leading-snug text-green-900">Pipeline status</h2>
-              <DetailLink to="/recruiter/applications" />
+              <DetailLink to="/recruiter/jobs" />
             </div>
             <div className="space-y-2.5">
               <div className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50/90 px-3 py-2.5 ring-1 ring-amber-100/80">
@@ -127,7 +127,7 @@ export default function RecruiterDashboard() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="text-sm font-black text-violet-950">{s.shortlisted}</span>
-                  <DetailLink to="/recruiter/applications" />
+                  <DetailLink to="/recruiter/jobs" />
                 </div>
               </div>
               <div className="flex items-center justify-between gap-2 rounded-2xl bg-emerald-50/90 px-3 py-2.5 ring-1 ring-emerald-100/80">
@@ -137,7 +137,7 @@ export default function RecruiterDashboard() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="text-sm font-black text-emerald-950">{s.accepted}</span>
-                  <DetailLink to="/recruiter/applications" />
+                  <DetailLink to="/recruiter/jobs" />
                 </div>
               </div>
               <div className="flex items-center justify-between gap-2 rounded-2xl bg-rose-50/90 px-3 py-2.5 ring-1 ring-rose-100/80">

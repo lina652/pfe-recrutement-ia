@@ -38,6 +38,17 @@ class ProposeTimeRequest(BaseModel):
     availability_comment: str = Field(..., max_length=2000)
 
 
+class InterviewLanguageUpdate(BaseModel):
+    language: str = Field(..., pattern="^(en|fr)$")
+
+
+class InterviewMessageItem(BaseModel):
+    role: str
+    content: str
+    audio_url: Optional[str] = None
+    turn_number: Optional[int] = None
+
+
 class InterviewCandidateDetail(BaseModel):
     interview_id: str
     application_id: str
@@ -51,6 +62,9 @@ class InterviewCandidateDetail(BaseModel):
     candidate_responded_at: Optional[datetime] = None
     auto_scheduled: bool = False
     candidate_availability_comment: Optional[str] = None
+    phase: Optional[str] = None
+    turn_count: Optional[int] = None
+    messages: List[InterviewMessageItem] = []
 
 
 class InterviewStart(BaseModel):
@@ -108,6 +122,7 @@ class InterviewListItem(BaseModel):
     candidate_response_reason: Optional[str] = None
     completed_at: Optional[datetime] = None
     phase: str
+    turn_count: Optional[int] = None
 
 
 class InterviewDetail(BaseModel):
@@ -144,6 +159,7 @@ class TimeSlotListResponse(BaseModel):
 
 class SelectTimeSlotRequest(BaseModel):
     selected_datetime: datetime
+    language: Optional[str] = Field(default=None, pattern="^(en|fr)$")
 
 
 class SelectTimeSlotResponse(BaseModel):

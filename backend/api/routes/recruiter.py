@@ -6,25 +6,24 @@ import uuid
 
 from database import get_db
 from models.user import User, UserRole
-from models.job_offer import JobOffer
+from models.job_offer import JobOffer, LocationType, ExperienceLevel, LocationType, ExperienceLevel
 from models.application import Application, ApplicationStatus
-from models.candidate import Candidate
 from models.log import Log
 from models.company import Company
 from models.requirement_request import RequirementRequest, RequestStatus
 from models.notification import Notification
 from core.dependencies import require_role
+from core.closing_date import is_closing_due, parse_and_validate_closing, validate_closing_datetime
+from schemas.manager import ReopenJobRequest
 from schemas.recruiter import (
     CreateJobOfferRequest,
     UpdateJobOfferRequest,
     JobOfferResponse,
     JobOfferListResponse,
-    ApplicationResponse,
-    ApplicationListResponse,
-    OverrideRequest,
     RecruiterStats,
     RequirementRequestForHR,
     RequirementRequestListForHR,
+    AcceptRequirementRequest,
     RejectRequirementRequest
 )
 from schemas.notification import NotificationResponse, NotificationListResponse
@@ -33,6 +32,25 @@ router = APIRouter(
     prefix="/recruiter",
     tags=["Recruiter / HR"]
 )
+
+
+def _parse_location_type(value: Optional[str]):
+    if not value:
+        return None
+    try:
+        return LocationType(value)
+    except ValueError:
+        return None
+
+
+def _parse_experience_level(value: Optional[str]):
+    if not value:
+        return None
+    try:
+        return ExperienceLevel(value)
+    except ValueError:
+        return None
+
 
 def save_log(db, action, user_id=None, user_email=None, details=None, ip_address=None):
     log = Log(
@@ -80,54 +98,6 @@ def get_recruiter_stats(
             Application.status == ApplicationStatus.ACCEPTED
         ).count()
     )
-
-# ─────────────────────────────
-# POST /recruiter/jobs
-# ─────────────────────────────
-
-@router.post("/jobs", response_model=JobOfferResponse, status_code=201)
-def create_job_offer(
-    payload: CreateJobOfferRequest,
-    request: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.RECRUITER))
-):
-    company = db.query(Company).filter(
-        Company.company_id == current_user.company_id
-    ).first()
-    company_name = company.name if company else "Unknown"
-
-    job = JobOffer(
-        job_id=str(uuid.uuid4()),
-        posted_by=current_user.user_id,
-        company_id=current_user.company_id,
-        company_name=company_name,
-        title=payload.title,
-        description=payload.description,
-        requirements=payload.requirements,
-        location=payload.location,
-        location_type=payload.location_type,
-        contract_type=payload.contract_type,
-        department=payload.department,
-        experience_level=payload.experience_level,
-        required_skills=payload.required_skills,
-        salary_range=payload.salary_range,
-        closing_date=payload.closing_date
-    )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-
-    save_log(
-        db=db,
-        action="CREATE_JOB",
-        user_id=current_user.user_id,
-        user_email=current_user.email,
-        details=f"Created job: {payload.title}",
-        ip_address=request.client.host
-    )
-
-    return job
 
 # ─────────────────────────────
 # GET /recruiter/jobs
@@ -193,7 +163,7 @@ def update_job_offer(
 ):
     job = db.query(JobOffer).filter(
         JobOffer.job_id == job_id,
-        JobOffer.posted_by == current_user.user_id
+        JobOffer.company_id == current_user.company_id,
     ).first()
 
     if not job:
@@ -219,9 +189,30 @@ def update_job_offer(
         job.required_skills = payload.required_skills
     if payload.salary_range is not None:
         job.salary_range = payload.salary_range
+
+    reopening = payload.is_active is True and not job.is_active
     if payload.closing_date is not None:
-        job.closing_date = payload.closing_date
-    if payload.is_active is not None:
+        closing_dt = payload.closing_date
+        if closing_dt.tzinfo is not None:
+            closing_dt = closing_dt.astimezone().replace(tzinfo=None)
+        validate_closing_datetime(closing_dt)
+        if reopening:
+            from services.job_closing_service import reopen_job_for_applications
+            reopen_job_for_applications(db, job, closing_dt)
+        else:
+            job.closing_date = closing_dt
+            job.closing_processed = False
+            from services.job_closing_service import schedule_job_closing_task
+            schedule_job_closing_task(closing_dt, job.job_id)
+    elif reopening:
+        if job.closing_date and is_closing_due(job.closing_date):
+            raise HTTPException(
+                status_code=400,
+                detail="Closing date has passed. Set a new closing date to reopen this job.",
+            )
+        job.is_active = True
+        job.closing_processed = False
+    elif payload.is_active is not None:
         job.is_active = payload.is_active
 
     db.commit()
@@ -237,6 +228,84 @@ def update_job_offer(
     )
 
     return job
+
+
+@router.put("/jobs/{job_id}/salary")
+def edit_job_salary(
+    job_id: str,
+    payload: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.RECRUITER))
+):
+    """Update only the salary range of a job offer"""
+    job = db.query(JobOffer).filter(
+        JobOffer.job_id == job_id,
+        JobOffer.company_id == current_user.company_id
+    ).first()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Job offer not found")
+
+    salary_range = payload.get("salary_range", "").strip()
+    if not salary_range:
+        raise HTTPException(status_code=400, detail="Salary range is required")
+
+    job.salary_range = salary_range
+    db.commit()
+    db.refresh(job)
+
+    save_log(
+        db=db,
+        action="EDIT_JOB_SALARY",
+        user_id=current_user.user_id,
+        user_email=current_user.email,
+        details=f"Updated salary range for job: {job.title}. New range: {salary_range}",
+        ip_address=request.client.host
+    )
+
+    return job
+
+
+@router.post("/jobs/{job_id}/reopen")
+def reopen_job_offer(
+    job_id: str,
+    body: ReopenJobRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.RECRUITER)),
+):
+    from services.job_closing_service import reopen_job_for_applications
+
+    job = db.query(JobOffer).filter(
+        JobOffer.job_id == job_id,
+        JobOffer.company_id == current_user.company_id,
+    ).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job offer not found")
+
+    closing_date = parse_and_validate_closing(body.new_closing_date)
+    reopen_job_for_applications(db, job, closing_date)
+    db.commit()
+    db.refresh(job)
+
+    save_log(
+        db=db,
+        action="REOPEN_JOB",
+        user_id=current_user.user_id,
+        user_email=current_user.email,
+        details=f"Reopened job {job.title} until {closing_date.isoformat()}",
+        ip_address=request.client.host,
+    )
+
+    return {
+        "message": "Job reopened",
+        "job_id": job.job_id,
+        "job_title": job.title,
+        "is_active": job.is_active,
+        "closing_processed": job.closing_processed,
+        "closing_date": job.closing_date.isoformat() if job.closing_date else None,
+    }
 
 # ─────────────────────────────
 # DELETE /recruiter/jobs/{id}
@@ -272,127 +341,6 @@ def delete_job_offer(
     return {"message": "Job offer deleted successfully"}
 
 # ─────────────────────────────
-# GET /recruiter/applications
-# ─────────────────────────────
-
-@router.get("/applications", response_model=ApplicationListResponse)
-def get_applications(
-    job_id: Optional[str] = None,
-    status: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.RECRUITER))
-):
-    # Only show applications for this company's jobs
-    company_job_ids = [
-        j.job_id for j in db.query(JobOffer).filter(
-            JobOffer.company_id == current_user.company_id
-        ).all()
-    ]
-
-    query = db.query(Application).filter(
-        Application.job_id.in_(company_job_ids)
-    )
-
-    if job_id:
-        query = query.filter(Application.job_id == job_id)
-
-    if status:
-        query = query.filter(Application.status == status)
-
-    applications = query.order_by(
-        Application.submission_date.desc()
-    ).all()
-
-    job_ids = [a.job_id for a in applications]
-    candidate_ids = [a.candidate_id for a in applications]
-    jobs = db.query(JobOffer).filter(JobOffer.job_id.in_(job_ids)).all() if job_ids else []
-    candidates = db.query(Candidate).filter(Candidate.candidate_id.in_(candidate_ids)).all() if candidate_ids else []
-
-    job_map = {j.job_id: j for j in jobs}
-    candidate_map = {c.candidate_id: c for c in candidates}
-    user_ids = [c.user_id for c in candidates if c.user_id]
-    users = db.query(User).filter(User.user_id.in_(user_ids)).all() if user_ids else []
-    user_map = {u.user_id: u for u in users}
-
-    enriched = []
-    for app in applications:
-        job = job_map.get(app.job_id)
-        candidate = candidate_map.get(app.candidate_id)
-        user = user_map.get(candidate.user_id) if candidate else None
-        row = ApplicationResponse.model_validate(app).model_dump()
-        row["job_title"] = job.title if job else None
-        row["company_name"] = job.company_name if job else None
-        row["candidate_name"] = f"{user.first_name} {user.last_name}".strip() if user else None
-        enriched.append(ApplicationResponse.model_validate(row))
-
-    return ApplicationListResponse(
-        total=len(enriched),
-        applications=enriched
-    )
-
-# ─────────────────────────────
-# GET /recruiter/applications/{id}
-# ─────────────────────────────
-
-@router.get("/applications/{app_id}", response_model=ApplicationResponse)
-def get_application(
-    app_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.RECRUITER))
-):
-    application = db.query(Application).filter(
-        Application.app_id == app_id
-    ).first()
-
-    if not application:
-        raise HTTPException(status_code=404, detail="Application not found")
-
-    return application
-
-# ─────────────────────────────
-# PUT /recruiter/applications/{id}/override
-# ─────────────────────────────
-
-@router.put("/applications/{app_id}/override")
-def override_ai_decision(
-    app_id: str,
-    payload: OverrideRequest,
-    request: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.RECRUITER))
-):
-    application = db.query(Application).filter(
-        Application.app_id == app_id
-    ).first()
-
-    if not application:
-        raise HTTPException(status_code=404, detail="Application not found")
-
-    old_status = application.status
-    application.status = payload.status
-    application.hr_override = True
-    application.hr_override_reason = payload.reason
-    application.last_updated = datetime.utcnow()
-    db.commit()
-
-    save_log(
-        db=db,
-        action="OVERRIDE_AI_DECISION",
-        user_id=current_user.user_id,
-        user_email=current_user.email,
-        details=f"Override app {app_id} from {old_status} to {payload.status}. Reason: {payload.reason}",
-        ip_address=request.client.host
-    )
-
-    return {
-        "message": "AI decision overridden successfully",
-        "app_id": app_id,
-        "old_status": old_status,
-        "new_status": payload.status,
-        "reason": payload.reason
-    }
-
-# ─────────────────────────────
 # GET /recruiter/requirement-requests
 # ─────────────────────────────
 
@@ -426,8 +374,16 @@ def get_requirement_requests(
             requirements=r.requirements,
             required_skills=r.required_skills,
             experience_years=r.experience_years,
+            experience_level=getattr(r, "experience_level", None),
             education_level=r.education_level,
             location=r.location,
+            location_type=getattr(r, "location_type", None),
+            languages_required=getattr(r, "languages_required", None),
+            languages_other=getattr(r, "languages_other", None),
+            soft_skills=getattr(r, "soft_skills", None),
+            soft_skills_other=getattr(r, "soft_skills_other", None),
+            certifications=getattr(r, "certifications", None),
+            certifications_other=getattr(r, "certifications_other", None),
             contract_type=r.contract_type,
             department=r.department,
             salary_range=r.salary_range,
@@ -450,6 +406,7 @@ def get_requirement_requests(
 @router.put("/requirement-requests/{request_id}/accept")
 def accept_requirement_request(
     request_id: str,
+    payload: AcceptRequirementRequest,
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.RECRUITER))
@@ -470,6 +427,16 @@ def accept_requirement_request(
     req.reviewed_by = current_user.user_id
     req.reviewed_at = datetime.utcnow()
 
+    salary_from_hr = (payload.salary_range or "").strip()
+    if not salary_from_hr:
+        raise HTTPException(status_code=400, detail="Salary range is required")
+    req.salary_range = salary_from_hr
+    job_salary_range = salary_from_hr
+
+    if not req.closing_date:
+        raise HTTPException(status_code=400, detail="Requirement has no closing date")
+    validate_closing_datetime(req.closing_date, reference=datetime.utcnow())
+
     company = db.query(Company).filter(
         Company.company_id == req.company_id
     ).first()
@@ -486,18 +453,22 @@ def accept_requirement_request(
         requirements=req.requirements,
         required_skills=req.required_skills,
         experience_years=req.experience_years,
+        experience_level=_parse_experience_level(getattr(req, "experience_level", None)),
         education_level=req.education_level,
         location=req.location,
+        location_type=_parse_location_type(getattr(req, "location_type", None)),
+        languages_required=getattr(req, "languages_required", None),
+        languages_other=getattr(req, "languages_other", None),
+        soft_skills=getattr(req, "soft_skills", None),
+        soft_skills_other=getattr(req, "soft_skills_other", None),
+        certifications=getattr(req, "certifications", None),
+        certifications_other=getattr(req, "certifications_other", None),
         contract_type=req.contract_type or "CDI",
         department=req.department,
-        salary_range=req.salary_range,
+        salary_range=job_salary_range,
         closing_date=req.closing_date  # Manager's specified closing date
     )
     
-    # Schedule the job closing task when closing_date is set
-    if req.closing_date:
-        from tasks.cv_tasks import process_job_closing
-        process_job_closing.apply_async(args=[job.job_id], eta=req.closing_date)
     db.add(job)
     db.flush()
     req.created_job_id = job.job_id
@@ -515,6 +486,10 @@ def accept_requirement_request(
     )
     db.add(notification)
     db.commit()
+
+    if req.closing_date:
+        from services.job_closing_service import schedule_job_closing_task
+        schedule_job_closing_task(req.closing_date, job.job_id)
 
     save_log(
         db=db,
@@ -592,6 +567,53 @@ def reject_requirement_request(
     }
 
 # ─────────────────────────────
+# PUT /recruiter/requirement-requests/{id}/salary
+# HR edits only the salary of a PENDING requirement
+# ─────────────────────────────
+
+@router.put("/requirement-requests/{request_id}/salary")
+def edit_requirement_salary_as_hr(
+    request_id: str,
+    payload: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.RECRUITER))
+):
+    req = db.query(RequirementRequest).filter(
+        RequirementRequest.request_id == request_id,
+        RequirementRequest.company_id == current_user.company_id
+    ).first()
+
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement request not found")
+
+    if req.status != RequestStatus.PENDING:
+        raise HTTPException(status_code=400, detail="Only pending requirements can have salary edited")
+
+    salary_range = payload.get("salary_range", "").strip()
+    if not salary_range:
+        raise HTTPException(status_code=400, detail="Salary range is required")
+
+    req.salary_range = salary_range
+    db.commit()
+    db.refresh(req)
+
+    save_log(
+        db=db,
+        action="EDIT_SALARY_AS_HR",
+        user_id=current_user.user_id,
+        user_email=current_user.email,
+        details=f"Updated salary range for requirement: {req.title}. New range: {salary_range}",
+        ip_address=request.client.host
+    )
+
+    return {
+        "message": "Salary range updated",
+        "request_id": request_id,
+        "salary_range": salary_range
+    }
+
+# ─────────────────────────────
 # GET /recruiter/notifications
 # ─────────────────────────────
 
@@ -652,3 +674,19 @@ def get_recruiter_unread_count(
     ).count()
 
     return {"unread_count": count}
+
+
+# ─────────────────────────────
+# DELETE /recruiter/notifications
+# ─────────────────────────────
+
+@router.delete("/notifications")
+def clear_recruiter_notifications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.RECRUITER))
+):
+    deleted = db.query(Notification).filter(
+        Notification.user_id == current_user.user_id
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"message": "Notifications cleared", "deleted": deleted}

@@ -2,12 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
+from core.closing_date import parse_and_validate_closing
 import uuid
 
 from database import get_db
 from models.user import User, UserRole
 from models.job_offer import JobOffer
 from models.application import Application, ApplicationStatus
+from models.candidate import Candidate
 from models.log import Log
 from models.requirement_request import RequirementRequest, RequestStatus
 from models.notification import Notification
@@ -19,6 +21,11 @@ from schemas.manager import (
     CandidateApplicationResponse,
     CandidateListResponse,
     FinalSelectionRequest,
+    FinalSelectionJobItem,
+    FinalSelectionJobListResponse,
+    FinalSelectionJobDetailResponse,
+    FinalSelectionCandidateItem,
+    ReopenJobRequest,
     ManagerStats,
     RequirementRequestResponse,
     RequirementRequestListResponse
@@ -92,13 +99,7 @@ def submit_requirements(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.HIRING_MANAGER))
 ):
-    # Parse closing_date
-    closing_date_dt = None
-    if payload.closing_date:
-        try:
-            closing_date_dt = datetime.strptime(payload.closing_date, "%Y-%m-%d")
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid closing_date format. Use YYYY-MM-DD")
+    closing_date_dt = parse_and_validate_closing(payload.closing_date)
 
     # Create the requirement request
     req = RequirementRequest(
@@ -110,8 +111,16 @@ def submit_requirements(
         requirements=payload.requirements,
         required_skills=payload.required_skills,
         experience_years=payload.experience_years if payload.experience_years is not None else None,
+        experience_level=payload.experience_level,
         education_level=payload.education_level,
         location=payload.location,
+        location_type=payload.location_type,
+        languages_required=payload.languages_required,
+        languages_other=payload.languages_other,
+        soft_skills=payload.soft_skills,
+        soft_skills_other=payload.soft_skills_other,
+        certifications=payload.certifications,
+        certifications_other=payload.certifications_other,
         contract_type=payload.contract_type or "CDI",
         department=payload.department,
         closing_date=closing_date_dt,
@@ -155,6 +164,72 @@ def submit_requirements(
     return {
         "message": "Job requirements sent to HR for approval",
         "request_id": req.request_id,
+        "title": payload.title,
+        "status": "PENDING"
+    }
+
+# ─────────────────────────────
+# PUT /manager/requirement-requests/{id}
+# Manager edits a PENDING requirement
+# ─────────────────────────────
+
+@router.put("/requirement-requests/{request_id}")
+def edit_requirement_request(
+    request_id: str,
+    payload: SubmitRequirementsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.HIRING_MANAGER))
+):
+    req = db.query(RequirementRequest).filter(
+        RequirementRequest.request_id == request_id,
+        RequirementRequest.submitted_by == current_user.user_id
+    ).first()
+
+    if not req:
+        raise HTTPException(status_code=404, detail="Requirement request not found")
+
+    if req.status != RequestStatus.PENDING:
+        raise HTTPException(status_code=400, detail="Only pending requests can be edited")
+
+    closing_date_dt = parse_and_validate_closing(payload.closing_date)
+
+    # Update the requirement request
+    req.title = payload.title
+    req.description = payload.description
+    req.requirements = payload.requirements
+    req.required_skills = payload.required_skills
+    req.experience_years = payload.experience_years if payload.experience_years is not None else None
+    req.experience_level = payload.experience_level
+    req.education_level = payload.education_level
+    req.location = payload.location
+    req.location_type = payload.location_type
+    req.languages_required = payload.languages_required
+    req.languages_other = payload.languages_other
+    req.soft_skills = payload.soft_skills
+    req.soft_skills_other = payload.soft_skills_other
+    req.certifications = payload.certifications
+    req.certifications_other = payload.certifications_other
+    req.contract_type = payload.contract_type or "CDI"
+    req.department = payload.department
+    req.closing_date = closing_date_dt
+
+    db.commit()
+    db.refresh(req)
+
+    save_log(
+        db=db,
+        action="EDIT_REQUIREMENTS",
+        user_id=current_user.user_id,
+        user_email=current_user.email,
+        company_id=current_user.company_id,
+        details=f"Edited pending job requirements: {payload.title}",
+        ip_address=request.client.host
+    )
+
+    return {
+        "message": "Job requirements updated",
+        "request_id": request_id,
         "title": payload.title,
         "status": "PENDING"
     }
@@ -272,34 +347,17 @@ def get_unread_count(
 
     return {"unread_count": count}
 
-# ─────────────────────────────
-# GET /manager/shortlisted
-# ─────────────────────────────
 
-@router.get("/shortlisted", response_model=CandidateListResponse)
-def get_shortlisted_candidates(
-    job_id: Optional[str] = None,
+@router.delete("/notifications")
+def clear_manager_notifications(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.HIRING_MANAGER))
 ):
-    query = db.query(Application).filter(
-        Application.status == ApplicationStatus.SHORTLISTED
-    )
-
-    if job_id:
-        query = query.filter(Application.job_id == job_id)
-
-    applications = query.order_by(
-        Application.final_score.desc()
-    ).all()
-
-    return CandidateListResponse(
-        total=len(applications),
-        applications=[
-            CandidateApplicationResponse.model_validate(a)
-            for a in applications
-        ]
-    )
+    deleted = db.query(Notification).filter(
+        Notification.user_id == current_user.user_id
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"message": "Notifications cleared", "deleted": deleted}
 
 # ─────────────────────────────
 # GET /manager/applications
@@ -333,6 +391,73 @@ def get_all_applications(
     )
 
 # ─────────────────────────────
+# GET /manager/final-selection/jobs
+# ─────────────────────────────
+
+@router.get("/final-selection/jobs", response_model=FinalSelectionJobListResponse)
+def list_final_selection_jobs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.HIRING_MANAGER)),
+):
+    from services.final_selection_service import list_manager_final_selection_jobs
+
+    rows = list_manager_final_selection_jobs(
+        db, current_user.user_id, current_user.company_id
+    )
+    items = [FinalSelectionJobItem(**row) for row in rows]
+    items.sort(
+        key=lambda j: (
+            not j.ready_for_selection,
+            j.title.lower(),
+            (j.subtitle or "").lower(),
+        )
+    )
+    return FinalSelectionJobListResponse(total=len(items), jobs=items)
+
+
+# ─────────────────────────────
+# GET /manager/final-selection/{job_id}
+# ─────────────────────────────
+
+@router.get("/final-selection/{job_id}", response_model=FinalSelectionJobDetailResponse)
+def get_final_selection_for_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.HIRING_MANAGER)),
+):
+    from services.final_selection_service import manager_job_ids, get_final_selection_candidates
+
+    if job_id not in manager_job_ids(db, current_user.user_id, current_user.company_id):
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job = db.query(JobOffer).filter(
+        JobOffer.job_id == job_id,
+        JobOffer.company_id == current_user.company_id,
+    ).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    data = get_final_selection_candidates(db, job_id)
+    if data.get("error") == "job_not_found":
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    from schemas.manager import ShortlistedPreviewItem
+
+    return FinalSelectionJobDetailResponse(
+        job_id=data["job_id"],
+        title=data["title"],
+        ready=data["ready"],
+        message=data.get("message"),
+        pending_interviews=data.get("pending_interviews", 0),
+        total_shortlisted=data.get("total_shortlisted", 0),
+        shortlisted_preview=[
+            ShortlistedPreviewItem(**p) for p in data.get("shortlisted_preview", [])
+        ],
+        candidates=[FinalSelectionCandidateItem(**c) for c in data.get("candidates", [])],
+    )
+
+
+# ─────────────────────────────
 # POST /manager/select
 # ─────────────────────────────
 
@@ -343,14 +468,18 @@ def make_final_selection(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.HIRING_MANAGER))
 ):
-    from tasks.notification_tasks import send_decision_email_async
-    
+    from services.selection_notification_service import notify_application_decision
+
     application = db.query(Application).filter(
         Application.app_id == payload.app_id
     ).first()
 
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+
+    job = db.query(JobOffer).filter(JobOffer.job_id == application.job_id).first()
+    if not job or job.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Not authorized for this application")
 
     if application.status != ApplicationStatus.SHORTLISTED:
         raise HTTPException(
@@ -361,36 +490,17 @@ def make_final_selection(
     application.status = ApplicationStatus.ACCEPTED
     application.last_updated = datetime.utcnow()
 
-    job = db.query(JobOffer).filter(
-        JobOffer.job_id == application.job_id
-    ).first()
-    
-    # Get accepted candidate info for notification
     accepted_candidate = db.query(Candidate).filter(
         Candidate.candidate_id == application.candidate_id
     ).first()
-    
-    # Create acceptance notification
-    if accepted_candidate:
-        acceptance_notification = Notification(
-            notification_id=str(uuid.uuid4()),
-            user_id=accepted_candidate.user_id,
-            company_id=job.company_id if job else None,
-            title="🎉 Congratulations! You've Been Selected!",
-            message=f"Great news! You have been selected for the position of {job.title if job else 'the job'} at {job.company_name if job else 'our company'}. Our HR team will contact you shortly with next steps. Congratulations on your success!",
-            type="APPLICATION_ACCEPTED",
-            reference_id=application.app_id,
-            is_read=False
-        )
-        db.add(acceptance_notification)
-        
-        # Queue acceptance email
-        send_decision_email_async.delay(
-            accepted_candidate.user_id, 
-            application.app_id, 
-            "ACCEPTED",
-            job.title if job else "Unknown Position",
-            job.company_name if job else "Unknown Company"
+
+    if accepted_candidate and job:
+        notify_application_decision(
+            db,
+            application=application,
+            job=job,
+            candidate=accepted_candidate,
+            decision="ACCEPTED",
         )
 
     other_applications = db.query(Application).filter(
@@ -408,27 +518,13 @@ def make_final_selection(
             Candidate.candidate_id == other.candidate_id
         ).first()
         
-        if rejected_candidate:
-            # Create rejection notification
-            rejection_notification = Notification(
-                notification_id=str(uuid.uuid4()),
-                user_id=rejected_candidate.user_id,
-                company_id=job.company_id if job else None,
-                title="Application Update",
-                message=f"Thank you for your interest in the {job.title if job else 'job'} position at {job.company_name if job else 'our company'}. After careful consideration, we have decided to move forward with another candidate. We appreciate your time and encourage you to apply for future opportunities.",
-                type="APPLICATION_REJECTED",
-                reference_id=other.app_id,
-                is_read=False
-            )
-            db.add(rejection_notification)
-            
-            # Queue rejection email
-            send_decision_email_async.delay(
-                rejected_candidate.user_id,
-                other.app_id,
-                "REJECTED",
-                job.title if job else "Unknown Position",
-                job.company_name if job else "Unknown Company"
+        if rejected_candidate and job:
+            notify_application_decision(
+                db,
+                application=other,
+                job=job,
+                candidate=rejected_candidate,
+                decision="REJECTED",
             )
 
     if job:
@@ -459,31 +555,41 @@ def make_final_selection(
 @router.post("/request-more/{job_id}")
 def request_more_candidates(
     job_id: str,
+    body: ReopenJobRequest,
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.HIRING_MANAGER))
 ):
+    from services.job_closing_service import reopen_job_for_applications
+
     job = db.query(JobOffer).filter(
-        JobOffer.job_id == job_id
+        JobOffer.job_id == job_id,
+        JobOffer.company_id == current_user.company_id,
     ).first()
 
     if not job:
         raise HTTPException(status_code=404, detail="Job offer not found")
 
-    job.is_active = True
+    closing_date = parse_and_validate_closing(body.new_closing_date)
+    reopen_job_for_applications(db, job, closing_date)
     db.commit()
+    db.refresh(job)
 
     save_log(
         db=db,
         action="REQUEST_MORE_CANDIDATES",
         user_id=current_user.user_id,
         user_email=current_user.email,
-        details=f"Requested more candidates for job: {job.title}",
+        company_id=current_user.company_id,
+        details=f"Requested more candidates for job: {job.title} with new closing date: {closing_date.isoformat()}",
         ip_address=request.client.host
     )
 
     return {
         "message": "Job reopened — more candidates can now apply",
         "job_id": job_id,
-        "job_title": job.title
+        "job_title": job.title,
+        "is_active": job.is_active,
+        "closing_processed": job.closing_processed,
+        "new_closing_date": job.closing_date.isoformat() if job.closing_date else None,
     }

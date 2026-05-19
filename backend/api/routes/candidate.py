@@ -1,14 +1,19 @@
+import logging
+import uuid
+from datetime import datetime
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import Optional
-from datetime import datetime
-import uuid
+
+logger = logging.getLogger(__name__)
 
 from database import get_db
 from models.user import User, UserRole
 from models.job_offer import JobOffer
 from models.application import Application, ApplicationStatus
 from models.candidate import Candidate
+from models.interview import Interview, InterviewMessage, InterviewReport
 from core.dependencies import get_current_user, require_role
 from core.security import hash_password
 from core.email_utils import normalize_email
@@ -328,15 +333,17 @@ def get_my_applications(
             JobOffer.job_id == app.job_id
         ).first()
 
+        status_val = (
+            app.status.value if hasattr(app.status, "value") else app.status
+        )
         result.append({
             "app_id": app.app_id,
             "job_id": app.job_id,
             "job_title": job.title if job else "Unknown",
             "company_name": job.company_name if job else "Unknown",
             "location": job.location if job else None,
-            "status": app.status,
-            "final_score": app.final_score,
-            "ai_recommendation": app.ai_recommendation,
+            "status": status_val,
+            "can_withdraw": status_val != ApplicationStatus.ACCEPTED.value,
             "submission_date": app.submission_date,
             "last_updated": app.last_updated
         })
@@ -368,16 +375,19 @@ def apply_to_job(
             detail="Candidate profile not found"
         )
 
-    # Check job exists and is active
+    from services.job_closing_service import deactivate_expired_jobs
+
+    deactivate_expired_jobs(db)
+
     job = db.query(JobOffer).filter(
         JobOffer.job_id == job_id,
-        JobOffer.is_active == True
+        JobOffer.is_active == True,
     ).first()
 
     if not job:
         raise HTTPException(
             status_code=404,
-            detail="Job offer not found or closed"
+            detail="Job offer not found or closed",
         )
 
     # Check not already applied
@@ -417,12 +427,101 @@ def apply_to_job(
     db.commit()
     db.refresh(application)
 
+    from services.cv_job_matching import match_and_persist_application, cv_match_percentage
+
+    try:
+        match_result = match_and_persist_application(db, application)
+        db.commit()
+        db.refresh(application)
+    except Exception as match_exc:
+        logger.warning("CV match on apply failed for %s: %s", application.app_id, match_exc)
+        match_result = {}
+
     return {
         "message": "Application submitted successfully",
         "app_id": application.app_id,
         "job_title": job.title,
         "status": application.status,
-        "closing_date": job.closing_date.isoformat() if job.closing_date else None
+        "closing_date": job.closing_date.isoformat() if job.closing_date else None,
+        "match_percentage": cv_match_percentage(match_result) if match_result else None,
+        "ai_recommendation": application.ai_recommendation,
+    }
+
+
+def _delete_application_cascade(db: Session, application: Application) -> None:
+    """Remove interviews (messages, reports), related notifications, then the application."""
+    interviews = (
+        db.query(Interview)
+        .filter(Interview.application_id == application.app_id)
+        .all()
+    )
+    interview_ids = [i.interview_id for i in interviews]
+
+    if interview_ids:
+        db.query(Notification).filter(
+            Notification.reference_id.in_(interview_ids)
+        ).delete(synchronize_session=False)
+
+    for interview in interviews:
+        db.query(InterviewMessage).filter(
+            InterviewMessage.interview_id == interview.interview_id
+        ).delete(synchronize_session=False)
+        db.query(InterviewReport).filter(
+            InterviewReport.interview_id == interview.interview_id
+        ).delete(synchronize_session=False)
+
+    db.query(Interview).filter(
+        Interview.application_id == application.app_id
+    ).delete(synchronize_session=False)
+    db.query(Notification).filter(
+        Notification.reference_id == application.app_id
+    ).delete(synchronize_session=False)
+    db.delete(application)
+
+
+# ─────────────────────────────
+# PRIVATE — DELETE /candidate/applications/{app_id}
+# ─────────────────────────────
+
+@router.delete("/applications/{app_id}")
+def withdraw_application(
+    app_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.CANDIDATE)),
+):
+    """Candidate withdraws / deletes their own application."""
+    candidate = db.query(Candidate).filter(
+        Candidate.user_id == current_user.user_id
+    ).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    application = db.query(Application).filter(Application.app_id == app_id).first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if application.candidate_id != candidate.candidate_id:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    status_val = (
+        application.status.value
+        if hasattr(application.status, "value")
+        else application.status
+    )
+    if status_val == ApplicationStatus.ACCEPTED.value:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot withdraw an application after you have been accepted for the role",
+        )
+
+    job = db.query(JobOffer).filter(JobOffer.job_id == application.job_id).first()
+    job_title = job.title if job else "the position"
+
+    _delete_application_cascade(db, application)
+    db.commit()
+
+    return {
+        "message": f"Your application for {job_title} has been withdrawn",
+        "app_id": app_id,
     }
 
 
@@ -467,3 +566,15 @@ def mark_candidate_notification_read(
     db.commit()
 
     return {"message": "Notification marked as read"}
+
+
+@router.delete("/notifications")
+def clear_candidate_notifications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.CANDIDATE))
+):
+    deleted = db.query(Notification).filter(
+        Notification.user_id == current_user.user_id
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"message": "Notifications cleared", "deleted": deleted}

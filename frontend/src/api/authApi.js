@@ -45,6 +45,8 @@ export const updateProfile = (data) => API.put("/auth/profile", data)
 // Admin
 export const getStats = () => API.get("/admin/stats")
 export const inviteStaff = (data) => API.post("/admin/invite", data)
+export const setPasswordFromInvite = (data) =>
+  axios.post("http://localhost:8000/admin/set-password", data)
 export const getUsers = (params) => API.get("/admin/users", { params })
 export const toggleUser = (id) => API.put(`/admin/users/${id}/toggle`)
 export const changeRole = (id, role) => API.put(`/admin/users/${id}/role`, { role })
@@ -54,7 +56,7 @@ export const generateReport = (data) => API.post("/admin/reports", data)
 
 // Super Admin
 export const getSuperAdminStats = () => API.get("/superadmin/stats")
-export const getCompanies = () => API.get("/superadmin/companies")
+export const getCompanies = (params) => API.get("/superadmin/companies", { params })
 export const toggleCompany = (id) => API.put(`/superadmin/companies/${id}/toggle`)
 
 // Recruiter
@@ -76,9 +78,13 @@ export const confirmSignup = (data) => axios.post("http://localhost:8000/candida
 // Candidate — auth needed
 export const getCandidateProfile = () => API.get("/candidate/profile")
 export const getMyApplications = () => API.get("/candidate/applications")
+export const deleteApplication = (appId) => API.delete(`/candidate/applications/${appId}`)
 export const applyToJob = (jobId) => API.post(`/candidate/apply/${jobId}`)
 export const getCandidateNotifications = () => API.get("/candidate/notifications")
 export const markCandidateNotificationRead = (id) => API.put(`/candidate/notifications/${id}/read`)
+export const clearRecruiterNotifications = () => API.delete("/recruiter/notifications")
+export const clearManagerNotifications = () => API.delete("/manager/notifications")
+export const clearCandidateNotifications = () => API.delete("/candidate/notifications")
 
 // Interview — Candidate
 export const getCandidateInterviews = () => API.get("/interviews/candidate/my-interviews")
@@ -89,9 +95,32 @@ export const submitInterviewTurn = (interviewId, formData) => API.post(`/intervi
   headers: { "Content-Type": "multipart/form-data" }
 })
 export const endInterview = (interviewId) => API.post(`/interviews/candidate/${interviewId}/end`)
+
+/** Best-effort end when the tab closes (keepalive fetch). */
+export function endInterviewOnPageLeave(interviewId) {
+  if (!interviewId) return
+  const token = localStorage.getItem("access_token")
+  if (!token) return
+  const base = API.defaults.baseURL || "http://localhost:8000"
+  fetch(`${base}/interviews/candidate/${interviewId}/end`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    keepalive: true,
+  }).catch(() => {})
+}
 export const getInterviewScores = (interviewId) => API.get(`/interviews/candidate/${interviewId}/scores`)
 export const getInterviewTimeSlots = (interviewId) => API.get(`/interviews/candidate/${interviewId}/time-slots`)
 export const selectInterviewTimeSlot = (interviewId, data) => API.post(`/interviews/candidate/${interviewId}/select-time`, data)
+export const updateInterviewLanguage = (interviewId, data) => API.patch(`/interviews/candidate/${interviewId}/language`, data)
+
+// Public interview scheduling (email link, no login)
+const PublicAPI = axios.create({ baseURL: "http://localhost:8000" })
+export const getPublicInterviewSchedule = (token) =>
+  PublicAPI.get("/public/interview/schedule", { params: { token } })
+export const submitPublicInterviewSchedule = (token, data) =>
+  PublicAPI.post("/public/interview/schedule", data, { params: { token } })
+export const updatePublicInterviewLanguage = (token, data) =>
+  PublicAPI.patch("/public/interview/schedule/language", data, { params: { token } })
 
 // Interview — Recruiter
 export const proposeInterviewTime = (interviewId, data) => API.post(`/interviews/candidate/${interviewId}/propose-time`, data)

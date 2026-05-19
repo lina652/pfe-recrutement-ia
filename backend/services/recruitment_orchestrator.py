@@ -174,7 +174,7 @@ class RecruitmentOrchestrator:
         from models.application import Application
         from models.job_offer import JobOffer
         from models.candidate import Candidate
-        from services.matching_service import matching_service
+        from services.cv_job_matching import match_parsed_cv_to_job, persist_application_match
         
         db = SessionLocal()
         try:
@@ -185,18 +185,6 @@ class RecruitmentOrchestrator:
                 state["errors"].append(f"Job not found: {job_id}")
                 return state
             
-            # Build job requirements
-            required_skills = []
-            if job.required_skills:
-                required_skills = [s.strip() for s in job.required_skills.split(",") if s.strip()]
-            
-            job_requirements = {
-                "skills": {"required": required_skills, "preferred": []},
-                "education": {"degree": job.education_level or ""},
-                "experience": {"min_years": int(job.experience_years or 0), "roles": []},
-                "languages": []
-            }
-            
             for app_data in state["applications"]:
                 app = db.query(Application).filter(
                     Application.app_id == app_data["app_id"]
@@ -205,7 +193,6 @@ class RecruitmentOrchestrator:
                 if not app:
                     continue
                 
-                # Build parsed CV from NER data or fallback
                 ner_data = app_data.get("ner_data")
                 if ner_data:
                     parsed_cv = ner_data
@@ -216,15 +203,13 @@ class RecruitmentOrchestrator:
                         "skills": {"technical": skill_list, "soft": []},
                         "education": [],
                         "work_experience": [],
-                        "languages": []
+                        "languages": [],
+                        "certifications": [],
+                        "projects": [],
                     }
                 
-                # Compute matching
-                result = matching_service.match(parsed_cv, job_requirements)
-                
-                # Update application
-                app.final_score = result.get("overall_score", 0)
-                app.ai_recommendation = result.get("recommendation", "")
+                result = match_parsed_cv_to_job(parsed_cv, job)
+                persist_application_match(db, app, result)
                 
                 app_data["matching_score"] = result.get("overall_score", 0)
                 app_data["matching_result"] = result

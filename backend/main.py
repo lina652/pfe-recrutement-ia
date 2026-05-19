@@ -60,6 +60,42 @@ def sync_requirement_requests_schema():
             conn.execute(text("ALTER TABLE requirement_requests ADD COLUMN closing_date TIMESTAMP"))
         if "job_id" in cols:
             conn.execute(text("ALTER TABLE requirement_requests ALTER COLUMN job_id DROP NOT NULL"))
+        if "location_type" not in cols:
+            conn.execute(text("ALTER TABLE requirement_requests ADD COLUMN location_type VARCHAR(20)"))
+        if "experience_level" not in cols:
+            conn.execute(text("ALTER TABLE requirement_requests ADD COLUMN experience_level VARCHAR(30)"))
+        if "languages_required" not in cols:
+            conn.execute(text("ALTER TABLE requirement_requests ADD COLUMN languages_required TEXT"))
+        if "languages_other" not in cols:
+            conn.execute(text("ALTER TABLE requirement_requests ADD COLUMN languages_other TEXT"))
+        if "soft_skills" not in cols:
+            conn.execute(text("ALTER TABLE requirement_requests ADD COLUMN soft_skills TEXT"))
+        if "soft_skills_other" not in cols:
+            conn.execute(text("ALTER TABLE requirement_requests ADD COLUMN soft_skills_other TEXT"))
+        if "certifications" not in cols:
+            conn.execute(text("ALTER TABLE requirement_requests ADD COLUMN certifications TEXT"))
+        if "certifications_other" not in cols:
+            conn.execute(text("ALTER TABLE requirement_requests ADD COLUMN certifications_other TEXT"))
+
+
+def sync_job_offers_schema():
+    inspector = inspect(engine)
+    if "job_offers" not in inspector.get_table_names():
+        return
+
+    cols = {c["name"] for c in inspector.get_columns("job_offers")}
+    with engine.begin() as conn:
+        for col, ddl in [
+            ("languages_required", "TEXT"),
+            ("languages_other", "TEXT"),
+            ("soft_skills", "TEXT"),
+            ("soft_skills_other", "TEXT"),
+            ("certifications", "TEXT"),
+            ("certifications_other", "TEXT"),
+            ("closing_processed", "BOOLEAN DEFAULT FALSE"),
+        ]:
+            if col not in cols:
+                conn.execute(text(f"ALTER TABLE job_offers ADD COLUMN {col} {ddl}"))
 
 
 def sync_interviews_schema():
@@ -79,6 +115,22 @@ def sync_interviews_schema():
             conn.execute(text("ALTER TABLE interviews ADD COLUMN candidate_response_reason TEXT"))
         if "candidate_responded_at" not in cols:
             conn.execute(text("ALTER TABLE interviews ADD COLUMN candidate_responded_at TIMESTAMP"))
+        if "schedule_token" not in cols:
+            conn.execute(text("ALTER TABLE interviews ADD COLUMN schedule_token VARCHAR(64)"))
+            try:
+                conn.execute(text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_interviews_schedule_token "
+                    "ON interviews (schedule_token)"
+                ))
+            except Exception:
+                pass
+        if "session_state" not in cols:
+            # JSON column to persist interview session state (silences, identity_warnings, etc.)
+            try:
+                conn.execute(text("ALTER TABLE interviews ADD COLUMN session_state JSON"))
+            except Exception:
+                # Some DBs (SQLite) don't support JSON type; fall back to TEXT
+                conn.execute(text("ALTER TABLE interviews ADD COLUMN session_state TEXT"))
 
 
 def sync_rag_schema():
@@ -113,11 +165,47 @@ def sync_interview_reports_schema():
 
 
 sync_requirement_requests_schema()
+sync_job_offers_schema()
 sync_interviews_schema()
+
+
+def backfill_interview_schedule_tokens():
+    """Ensure existing invited interviews have email scheduling tokens."""
+    from database import SessionLocal
+    from models.interview import Interview
+    from services.interview_scheduling import ensure_schedule_token
+
+    db = SessionLocal()
+    try:
+        rows = db.query(Interview).filter(Interview.schedule_token.is_(None)).all()
+        for row in rows:
+            ensure_schedule_token(row)
+        if rows:
+            db.commit()
+    finally:
+        db.close()
+
+
+backfill_interview_schedule_tokens()
 sync_rag_schema()
 sync_interview_reports_schema()
 
 app = FastAPI(title="AI Recruitment Platform", version="1.0.0")
+
+
+@app.on_event("startup")
+def close_expired_jobs_on_startup():
+    from database import SessionLocal
+    from services.job_closing_service import close_due_jobs
+
+    db = SessionLocal()
+    try:
+        n = close_due_jobs(db)
+        if n:
+            import logging
+            logging.getLogger(__name__).info("Closed %d expired job(s) on startup", n)
+    finally:
+        db.close()
 
 # CORS: browser requires Access-Control-Allow-Origin on API responses.
 # If you see a CORS error but the backend is down, Chrome still labels it as CORS — verify GET /health.

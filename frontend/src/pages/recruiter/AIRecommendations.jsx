@@ -50,8 +50,15 @@ export default function AIRecommendations() {
   const loadData = async () => {
     try {
       const jobsResult = await getRAGJobs()
-      setJobs(jobsResult.data || [])
-      setSelectedJobForNew(jobsResult.data?.[0]?.job_id || "")
+      const jobList = (jobsResult.data || []).slice().sort(
+        (a, b) => (b.application_count || 0) - (a.application_count || 0)
+      )
+      setJobs(jobList)
+      const firstJob = jobList.find((j) => (j.application_count || 0) > 0) || jobList[0]
+      if (firstJob?.job_id) {
+        setSelectedJobForNew(firstJob.job_id)
+        setNewConvTitle(firstJob.title)
+      }
       
       const convsResult = await listRAGConversations()
       setConversations(convsResult.data || [])
@@ -81,14 +88,16 @@ export default function AIRecommendations() {
   }
 
   const handleCreateConversation = async () => {
-    if (!newConvTitle.trim() || !selectedJobForNew) {
-      setToast({ type: "error", message: "Please enter a title and select a job" })
+    if (!selectedJobForNew) {
+      setToast({ type: "error", message: "Please select a job" })
       return
     }
 
+    const title = getJobTitle(selectedJobForNew)
+
     try {
       setCreateLoading(true)
-      const result = await createRAGConversation(selectedJobForNew, newConvTitle)
+      const result = await createRAGConversation(selectedJobForNew, title)
       setConversations([result.data, ...conversations])
       setSelectedConversationId(result.data.conversation_id)
       setCurrentMessages([])
@@ -129,8 +138,7 @@ export default function AIRecommendations() {
           return
         }
 
-        const newTitle = userMessage.length > 30 ? userMessage.substring(0, 30) + "..." : userMessage
-        const result = await createRAGConversation(jobToUse, newTitle)
+        const result = await createRAGConversation(jobToUse, getJobTitle(jobToUse))
         
         activeConversationId = result.data.conversation_id
         setConversations([result.data, ...conversations])
@@ -206,6 +214,33 @@ export default function AIRecommendations() {
     return job?.title || "Unknown job"
   }
 
+  const formatJobOptionLabel = (job) => {
+    if (!job?.job_id) return job?.label || "Select job"
+    const apps = job.application_count ?? 0
+    const interviews = job.completed_interview_count ?? 0
+    const base = job.title || job.label || "Job"
+    return `${base} (${apps} applicant${apps === 1 ? "" : "s"}, ${interviews} interview${interviews === 1 ? "" : "s"})`
+  }
+
+  const handleNewConversationJobChange = (jobId) => {
+    setSelectedJobForNew(jobId)
+    if (jobId) {
+      setNewConvTitle(getJobTitle(jobId))
+    }
+  }
+
+  const openNewConversationPanel = () => {
+    const jobId =
+      selectedJobFilter !== "all"
+        ? selectedJobFilter
+        : selectedJobForNew || jobs[0]?.job_id || ""
+    if (jobId) {
+      setSelectedJobForNew(jobId)
+      setNewConvTitle(getJobTitle(jobId))
+    }
+    setShowNewConversation(true)
+  }
+
   const filteredConversations = conversations.filter((conv) => {
     const matchJob = selectedJobFilter === "all" || conv.job_id === selectedJobFilter
     const matchFavorite = !favoritesOnly || conv.is_favorite
@@ -214,12 +249,22 @@ export default function AIRecommendations() {
 
   const jobFilterOptions = [
     { value: "all", label: "All jobs" },
-    ...jobs.map((job) => ({ value: job.job_id, label: job.title })),
+    ...jobs.map((job) => ({
+      value: job.job_id,
+      label: formatJobOptionLabel(job),
+      title: job.title,
+      application_count: job.application_count,
+    })),
   ]
 
   const newConversationJobOptions = [
     { value: "", label: "Select job" },
-    ...jobs.map((job) => ({ value: job.job_id, label: job.title })),
+    ...jobs.map((job) => ({
+      value: job.job_id,
+      label: formatJobOptionLabel(job),
+      title: job.title,
+      application_count: job.application_count,
+    })),
   ]
 
   if (loading) {
@@ -246,7 +291,10 @@ export default function AIRecommendations() {
             <div className="page-glass flex min-h-[28rem] flex-col md:min-h-[32rem]">
               <div className="p-4 border-b">
                 <button
-                  onClick={() => setShowNewConversation(!showNewConversation)}
+                  type="button"
+                  onClick={() =>
+                    showNewConversation ? setShowNewConversation(false) : openNewConversationPanel()
+                  }
                   className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition"
                 >
                   + New Conversation
@@ -273,22 +321,21 @@ export default function AIRecommendations() {
 
               {showNewConversation && (
                 <div className="p-4 border-b bg-blue-50">
-                  <input
-                    type="text"
-                    value={newConvTitle}
-                    onChange={(e) => setNewConvTitle(e.target.value)}
-                    placeholder="Conversation title..."
-                    className="w-full px-3 py-2 border rounded mb-2 text-sm"
-                  />
                   <GlassSelect
                     id="ai-new-conv-job"
                     aria-label="Job for new conversation"
                     className="mb-2"
                     value={selectedJobForNew}
-                    onChange={setSelectedJobForNew}
+                    onChange={handleNewConversationJobChange}
                     options={newConversationJobOptions}
                     placeholder="Select job"
                   />
+                  {selectedJobForNew && (
+                    <p className="mb-2 text-xs text-gray-600">
+                      Conversation name:{" "}
+                      <span className="font-semibold text-gray-800">{newConvTitle}</span>
+                    </p>
+                  )}
                   <div className="flex gap-2">
                     <button
                       onClick={handleCreateConversation}
@@ -414,7 +461,9 @@ export default function AIRecommendations() {
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {!selectedConversationId ? (
                 <div className="h-full flex flex-col items-center justify-center text-center">
-                  <div className="text-6xl mb-4">📋</div>
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+                    <DashboardNavIcon name="clipboardList" className="h-9 w-9" />
+                  </div>
                   <h3 className="font-bold text-lg text-gray-800 mb-2">
                     No Conversation Selected
                   </h3>
@@ -424,7 +473,9 @@ export default function AIRecommendations() {
                 </div>
               ) : currentMessages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center">
-                  <div className="text-6xl mb-4">🤖</div>
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
+                    <DashboardNavIcon name="cpu" className="h-9 w-9" />
+                  </div>
                   <h3 className="font-bold text-lg text-gray-800 mb-2">
                     AI Candidate Insights
                   </h3>
@@ -489,7 +540,7 @@ export default function AIRecommendations() {
             <div className="border-t p-4">
               {suggestions.length > 0 && (
                 <div className="mb-3 flex flex-wrap gap-2">
-                  {suggestions.slice(0, 4).map((suggestion, i) => (
+                  {suggestions.slice(0, 5).map((suggestion, i) => (
                     <button
                       key={i}
                       type="button"

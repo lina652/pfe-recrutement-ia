@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
 import RecruiterLayout from "../../components/recruiter/RecruiterLayout"
 import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
-import API from "../../api/authApi"
+import NotificationPageActions from "../../components/shared/NotificationPageActions"
+import API, { clearRecruiterNotifications } from "../../api/authApi"
 
 const TYPE_STYLES = {
   REQUIREMENT_SUBMITTED: { icon: "📨", color: "border-l-blue-500 bg-blue-50/50" },
@@ -15,6 +16,7 @@ export default function RecruiterNotifications() {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [clearing, setClearing] = useState(false)
 
   const fetchNotifications = async () => {
     try {
@@ -40,6 +42,21 @@ export default function RecruiterNotifications() {
       window.dispatchEvent(new Event("recruiter-notifications-updated"))
     } catch (err) {
       console.error(err)
+    }
+  }
+
+  const clearAll = async () => {
+    if (!notifications.length || clearing) return
+    setClearing(true)
+    try {
+      await clearRecruiterNotifications()
+      setNotifications([])
+      setUnreadCount(0)
+      window.dispatchEvent(new Event("recruiter-notifications-updated"))
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setClearing(false)
     }
   }
 
@@ -74,17 +91,18 @@ export default function RecruiterNotifications() {
             ? `You have ${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}`
             : "You're all caught up!"
         }
-      >
-        {unreadCount > 0 && (
-          <button
-            type="button"
-            onClick={markAllRead}
-            className="rounded-xl bg-green-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-green-800"
-          >
-            Mark all as read
-          </button>
-        )}
-      </PageHeader>
+      />
+
+      <div className="mx-auto mb-4 flex max-w-6xl justify-end">
+        <NotificationPageActions
+          unreadCount={unreadCount}
+          totalCount={notifications.length}
+          onMarkAllRead={markAllRead}
+          onClearAll={clearAll}
+          clearing={clearing}
+          accent="emerald"
+        />
+      </div>
 
       {loading ? (
         <div className="flex justify-center mt-20">

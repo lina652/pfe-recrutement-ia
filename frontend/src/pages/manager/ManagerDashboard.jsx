@@ -101,7 +101,7 @@ export default function ManagerDashboard() {
               </div>
             </div>
             <div className="mt-4 flex justify-end">
-              <DetailLink to="/manager/shortlisted">Shortlist</DetailLink>
+              <DetailLink to="/manager/selection">Final selection</DetailLink>
             </div>
           </section>
 
@@ -125,7 +125,7 @@ export default function ManagerDashboard() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="text-sm font-black text-violet-950">{s.total_shortlisted}</span>
-                  <DetailLink to="/manager/shortlisted" />
+                  <DetailLink to="/manager/selection" />
                 </div>
               </div>
               <div className="flex items-center justify-between gap-2 rounded-2xl bg-emerald-50/90 px-3 py-2.5 ring-1 ring-emerald-100/80">

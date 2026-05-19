@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import AdminLayout from "../../components/admin/AdminLayout"
 import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
 import { getReports, generateReport } from "../../api/authApi"
+import ReportContentView from "../../components/admin/ReportContentView"
 
 export default function Reports() {
   const [reports, setReports] = useState([])
@@ -89,13 +90,13 @@ export default function Reports() {
                 onChange={(e) => setTitle(e.target.value)}
                 required
                 placeholder="e.g. Monthly Recruitment Report"
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="page-glass-input w-full rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-200/50"
               />
             </div>
             <button
               type="submit"
               disabled={generating}
-              className="w-full bg-blue-700 text-white py-2 rounded-lg font-semibold text-sm hover:bg-blue-800 transition disabled:opacity-50"
+              className="w-full rounded-xl bg-violet-700 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-800 disabled:opacity-50"
             >
               {generating ? "Generating..." : "Generate Report"}
             </button>
@@ -117,34 +118,37 @@ export default function Reports() {
               {reports.map((report) => (
                 <div
                   key={report.report_id}
-                  className="page-glass p-5 cursor-pointer hover:border-blue-300 transition"
-                  onClick={() => setSelected(
-                    selected?.report_id === report.report_id ? null : report
-                  )}
+                  className={`page-glass cursor-pointer p-5 transition ${
+                    selected?.report_id === report.report_id
+                      ? "ring-2 ring-violet-300/80"
+                      : "hover:ring-1 hover:ring-violet-200/60"
+                  }`}
+                  onClick={() =>
+                    setSelected(
+                      selected?.report_id === report.report_id ? null : report
+                    )
+                  }
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-gray-800">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-slate-800">
                         {report.title}
                       </p>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="mt-1 text-xs font-medium text-slate-500">
                         {new Date(report.generated_at).toLocaleString()}
                       </p>
                     </div>
-                    <span className="text-xs font-semibold px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
+                    <span className="shrink-0 rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-800">
                       {report.format}
                     </span>
                   </div>
 
-                  {/* Expanded content */}
                   {selected?.report_id === report.report_id && (
-                    <div className="mt-4 pt-4 border-t border-gray-100">
-                      <p className="text-xs font-medium text-gray-500 mb-2">
-                        Report Content:
+                    <div className="mt-5 border-t border-white/40 pt-5">
+                      <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+                        Report summary
                       </p>
-                      <pre className="text-xs page-glass-inset rounded-lg p-3 overflow-auto text-gray-700">
-                        {report.content}
-                      </pre>
+                      <ReportContentView content={report.content} />
                     </div>
                   )}
                 </div>

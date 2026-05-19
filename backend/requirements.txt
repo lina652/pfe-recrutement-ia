@@ -1,5 +1,5 @@
 # ============================================
-# CORE DEPENDENCIES (already installed ✅)
+# CORE DEPENDENCIES
 # ============================================
 fastapi
 uvicorn
@@ -27,43 +27,36 @@ numpy
 pgvector
 
 # ============================================
-# INTERVIEW BOT (NEW)
+# INTERVIEW BOT
 # ============================================
-# Speech-to-Text
 openai
-
-# Text-to-Speech
+transformers
+torch
 edge-tts
-
-# Audio/Video Processing
 pydub
 moviepy
 opencv-python-headless
-
-# Emotion Detection
 deepface
 tensorflow
 tf-keras
-
-# System utilities
 ffmpeg-python
 
 # ============================================
-# RAG CHATBOT (NEW)
+# RAG CHATBOT
 # ============================================
-langchain==1.2.15
-langchain-community==0.4.1
-langchain-chroma==1.1.0
-langchain-groq==1.1.2
-langchain-huggingface==1.2.2
-chromadb==1.5.8
-langsmith==0.2.6
+langchain
+langchain-community
+langchain-chroma
+langchain-groq
+langchain-huggingface
+chromadb
+langsmith
 
 # ============================================
 # LANGGRAPH ORCHESTRATION
 # ============================================
-langgraph>=0.2.0
-langchain-core>=0.3.0
+langgraph
+langchain-core
 
 # ============================================
 # ASYNC TASK PROCESSING

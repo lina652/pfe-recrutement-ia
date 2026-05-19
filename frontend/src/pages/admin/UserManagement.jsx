@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import AdminLayout from "../../components/admin/AdminLayout"
 import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
@@ -13,6 +13,12 @@ const ROLE_LABELS = {
   HIRING_MANAGER: "Hiring manager",
   ADMINISTRATOR: "Administrator",
 }
+
+const STATUS_FILTER_OPTIONS = [
+  { value: "", label: "All statuses", description: "Active and inactive users." },
+  { value: "active", label: "Active", description: "Users who can sign in." },
+  { value: "inactive", label: "Inactive", description: "Deactivated accounts." },
+]
 
 const ROLE_FILTER_OPTIONS = [
   {
@@ -46,34 +52,52 @@ export default function UserManagement() {
   const [users, setUsers] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState("")
+  const [statusFilter, setStatusFilter] = useState("")
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
-  const fetchUsers = async () => {
-    setLoading(true)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchQuery(search.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [search])
+
+  const initialLoadDone = useRef(false)
+
+  const fetchUsers = useCallback(async ({ silent = false } = {}) => {
+    if (silent) setRefreshing(true)
+    else setLoading(true)
     try {
-      const res = await getUsers({
-        search: search || undefined,
-        role: roleFilter || undefined,
-      })
-      setUsers(res.data.users)
-      setTotal(res.data.total)
+      const params = {}
+      if (searchQuery) params.search = searchQuery
+      if (roleFilter) params.role = roleFilter
+      if (statusFilter === "active") params.is_active = true
+      if (statusFilter === "inactive") params.is_active = false
+
+      const res = await getUsers(params)
+      setUsers(Array.isArray(res.data?.users) ? res.data.users : [])
+      setTotal(typeof res.data?.total === "number" ? res.data.total : 0)
+      setError("")
     } catch (err) {
-      setError("Failed to load users")
+      setError(err.response?.data?.detail || "Failed to load users")
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
-  }
+  }, [searchQuery, roleFilter, statusFilter])
 
-  useEffect(() => { fetchUsers() }, [search, roleFilter])
+  useEffect(() => {
+    fetchUsers({ silent: !loading && users.length > 0 })
+  }, [fetchUsers])
 
   const handleToggle = async (userId) => {
     try {
       const res = await toggleUser(userId)
       setSuccess(res.data.message)
-      fetchUsers()
+      fetchUsers({ silent: true })
       setTimeout(() => setSuccess(""), 3000)
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to toggle user")
@@ -85,7 +109,7 @@ export default function UserManagement() {
     try {
       await changeRole(userId, role)
       setSuccess("Role updated successfully")
-      fetchUsers()
+      fetchUsers({ silent: true })
       setTimeout(() => setSuccess(""), 3000)
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to change role")
@@ -110,21 +134,30 @@ export default function UserManagement() {
         </button>
       </PageHeader>
 
-      <div className="flex gap-4 mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <input
           type="text"
           placeholder="Search by name or email..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           aria-label="Search users by name or email"
-          className="page-glass-input flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-200/50"
+          className="page-glass-input min-w-0 flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-800 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-200/50"
+        />
+        <GlassSelect
+          id="admin-users-status-filter"
+          aria-label="Filter users by status"
+          className="w-full min-w-[12rem] sm:max-w-[11rem] sm:shrink-0"
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={STATUS_FILTER_OPTIONS}
+          placeholder="All statuses"
         />
         <GlassSelect
           id="admin-users-role-filter"
           aria-label="Filter users by role"
-          className="w-full min-w-[15rem] sm:max-w-xs sm:shrink-0"
+          className="w-full min-w-[12rem] sm:max-w-[11rem] sm:shrink-0"
           value={roleFilter}
-          onChange={(v) => setRoleFilter(v)}
+          onChange={setRoleFilter}
           options={ROLE_FILTER_OPTIONS}
           placeholder="All roles"
         />
@@ -138,7 +171,7 @@ export default function UserManagement() {
           <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"/>
         </div>
       ) : (
-        <div className="page-glass overflow-hidden">
+        <div className={`page-glass overflow-hidden transition-opacity ${refreshing ? "opacity-60" : ""}`}>
           <table className="w-full text-sm">
             <thead className="page-glass-thead border-b border-white/40">
               <tr>

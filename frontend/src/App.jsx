@@ -12,6 +12,8 @@ import CompanySignup from "./pages/public/CompanySignup"
 import Jobs from "./pages/public/Jobs"
 import JobDetail from "./pages/public/JobDetail"
 import Apply from "./pages/public/Apply"
+import StaffActivate from "./pages/public/StaffActivate"
+import ScheduleInterview from "./pages/public/ScheduleInterview"
 
 // Super Admin
 import SuperAdminDashboard from "./pages/superadmin/SuperAdminDashboard"
@@ -27,16 +29,13 @@ import Reports from "./pages/admin/Reports"
 // Recruiter
 import RecruiterDashboard from "./pages/recruiter/RecruiterDashboard"
 import JobOffers from "./pages/recruiter/JobOffers"
-import Applications from "./pages/recruiter/Applications"
-import Interviews from "./pages/recruiter/Interviews"
-import AIRecommendations from "./pages/recruiter/AIRecommendations"
+import AIRecommendations from "./pages/manager/AIRecommendations"
 import RequirementRequests from "./pages/recruiter/RequirementRequests"
 import RecruiterNotifications from "./pages/recruiter/RecruiterNotifications"
 
 // Manager
 import ManagerDashboard from "./pages/manager/ManagerDashboard"
 import JobRequirements from "./pages/manager/JobRequirements"
-import ShortlistedCandidates from "./pages/manager/ShortlistedCandidates"
 import FinalSelection from "./pages/manager/FinalSelection"
 import ManagerNotifications from "./pages/manager/ManagerNotifications"
 
@@ -72,6 +71,8 @@ export default function App() {
             <Route path="/jobs/:id" element={<JobDetail />} />
             <Route path="/jobs/:id/apply" element={<Apply />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/staff/activate" element={<StaffActivate />} />
+            <Route path="/schedule-interview" element={<ScheduleInterview />} />
 
             {/* Super Admin */}
             <Route path="/superadmin/dashboard" element={
@@ -133,18 +134,8 @@ export default function App() {
                 <JobOffers />
               </ProtectedRoute>
             }/>
-            <Route path="/recruiter/applications" element={
-              <ProtectedRoute allowedRoles={["RECRUITER"]}>
-                <Applications />
-              </ProtectedRoute>
-            }/>
-            <Route path="/recruiter/interviews" element={
-              <ProtectedRoute allowedRoles={["RECRUITER"]}>
-                <Interviews />
-              </ProtectedRoute>
-            }/>
-            <Route path="/recruiter/ai" element={
-              <ProtectedRoute allowedRoles={["RECRUITER"]}>
+            <Route path="/manager/ai" element={
+              <ProtectedRoute allowedRoles={["HIRING_MANAGER"]}>
                 <AIRecommendations />
               </ProtectedRoute>
             }/>
@@ -175,11 +166,7 @@ export default function App() {
                 <JobRequirements />
               </ProtectedRoute>
             }/>
-            <Route path="/manager/shortlisted" element={
-              <ProtectedRoute allowedRoles={["HIRING_MANAGER"]}>
-                <ShortlistedCandidates />
-              </ProtectedRoute>
-            }/>
+
             <Route path="/manager/selection" element={
               <ProtectedRoute allowedRoles={["HIRING_MANAGER"]}>
                 <FinalSelection />

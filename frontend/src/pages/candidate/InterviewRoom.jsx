@@ -3,10 +3,33 @@ import { useParams, useNavigate } from "react-router-dom"
 import { useLanguage } from "../../context/LanguageContext"
 import { useAuth } from "../../context/AuthContext"
 import CandidateLayout from "../../components/candidate/CandidateLayout"
-import { startInterview, submitInterviewTurn, endInterview, getInterviewScores, getCandidateInterviewDetail, respondToCandidateInterview } from "../../api/authApi"
+import {
+  startInterview,
+  submitInterviewTurn,
+  endInterview,
+  endInterviewOnPageLeave,
+  getCandidateInterviewDetail,
+  respondToCandidateInterview,
+  updateInterviewLanguage,
+  getInterviewScores,
+} from "../../api/authApi"
 import Toast from "../../components/Toast"
+import { canStartInterview, formatInterviewStartLabel } from "../../utils/interviewTime"
 
 const PHASES = ["intro", "technical", "behavioral", "closing"]
+
+const RECORDING_MIME_PRIMARY = "video/webm;codecs=vp8,opus"
+const RECORDING_MIME_FALLBACK = "video/webm"
+const RECORDING_TIMESLICE_MS = 250
+const MIN_RECORDING_BYTES = 1000
+const VIDEO_BITS_PER_SECOND = 500_000
+
+function resolveRecordingMimeType() {
+  if (typeof MediaRecorder === "undefined") return RECORDING_MIME_FALLBACK
+  if (MediaRecorder.isTypeSupported(RECORDING_MIME_PRIMARY)) return RECORDING_MIME_PRIMARY
+  if (MediaRecorder.isTypeSupported(RECORDING_MIME_FALLBACK)) return RECORDING_MIME_FALLBACK
+  return ""
+}
 
 export default function InterviewRoom() {
   const { interviewId } = useParams()
@@ -14,7 +37,8 @@ export default function InterviewRoom() {
   const { user } = useAuth()
   const { t, language } = useLanguage()
   
-  const [stage, setStage] = useState("loading") // loading, invitation, language-select, recording, complete
+  const [stage, setStage] = useState("loading") // loading, invitation, waiting, starting, language-select, recording, complete
+  const [tick, setTick] = useState(0)
   const [selectedLanguage, setSelectedLanguage] = useState("en")
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -30,15 +54,67 @@ export default function InterviewRoom() {
   const [interviewDetail, setInterviewDetail] = useState(null)
   const [responseReason, setResponseReason] = useState("")
   const [toast, setToast] = useState(null)
+  const [interviewReport, setInterviewReport] = useState(null)
+  const [loadingReport, setLoadingReport] = useState(false)
   
   const videoRef = useRef(null)
   const mediaRecorderRef = useRef(null)
+  const recorderMimeRef = useRef(RECORDING_MIME_FALLBACK)
   const chunksRef = useRef([])
   const streamRef = useRef(null)
+  const startLockRef = useRef(false)
+  const transcriptEndRef = useRef(null)
+  const botAudioRef = useRef(null)
+  const sessionEndedRef = useRef(false)
+  const liveSessionRef = useRef(false)
+  const endRequestedRef = useRef(false)
+
+  const markLiveSession = () => {
+    liveSessionRef.current = true
+  }
+
+  const markSessionClosed = () => {
+    liveSessionRef.current = false
+  }
+
+  const abortInterviewOnLeave = () => {
+    if (endRequestedRef.current || !liveSessionRef.current) return
+    endRequestedRef.current = true
+    liveSessionRef.current = false
+    teardownInterviewSession()
+    endInterviewOnPageLeave(interviewId)
+  }
 
   useEffect(() => {
     loadInterviewDetail()
   }, [interviewId])
+
+  useEffect(() => {
+    const onPageHide = () => abortInterviewOnLeave()
+    window.addEventListener("pagehide", onPageHide)
+    return () => {
+      window.removeEventListener("pagehide", onPageHide)
+      abortInterviewOnLeave()
+    }
+  }, [interviewId])
+
+  useEffect(() => {
+    if (stage !== "waiting") return undefined
+    const id = setInterval(() => setTick((t) => t + 1), 15000)
+    return () => clearInterval(id)
+  }, [stage])
+
+  useEffect(() => {
+    if (stage !== "waiting" || !canStartInterview(interviewDetail?.scheduled_at)) return
+    const lang = interviewLanguage(interviewDetail)
+    if (lang && interviewDetail?.scheduled_at) {
+      setSelectedLanguage(lang)
+      setStage("starting")
+      beginInterviewSession(lang, interviewDetail)
+    } else {
+      setStage("language-select")
+    }
+  }, [stage, interviewDetail?.scheduled_at, interviewDetail?.language, tick])
 
   // Initialize camera
   useEffect(() => {
@@ -61,7 +137,7 @@ export default function InterviewRoom() {
       }, 1000)
     } else if (isThinking && thinkTimeLeft === 0) {
       setIsThinking(false)
-      startRecording() // Auto start after thinking
+      if (!sessionEndedRef.current) startRecording()
     }
     return () => clearInterval(interval)
   }, [isThinking, thinkTimeLeft])
@@ -78,56 +154,265 @@ export default function InterviewRoom() {
     return () => clearInterval(interval)
   }, [isRecording, recordTimeLeft])
 
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  const stopBotAudio = () => {
+    const audio = botAudioRef.current
+    if (audio) {
+      audio.onended = null
+      audio.pause()
+      try {
+        audio.currentTime = 0
+      } catch {
+        /* ignore */
+      }
+      botAudioRef.current = null
+    }
+    if (typeof document !== "undefined") {
+      document.querySelectorAll("audio").forEach((el) => {
+        el.pause()
+        try {
+          el.currentTime = 0
+        } catch {
+          /* ignore */
+        }
+      })
+    }
+  }
+
+  const teardownInterviewSession = () => {
+    sessionEndedRef.current = true
+    markSessionClosed()
+    stopBotAudio()
+    setIsThinking(false)
+    setIsRecording(false)
+    setIsProcessing(false)
+    if (mediaRecorderRef.current?.state === "recording") {
+      try {
+        mediaRecorderRef.current.requestData()
+        mediaRecorderRef.current.stop()
+      } catch {
+        /* ignore */
+      }
+    }
+    chunksRef.current = []
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+  }
+
+  const playBotAudio = (url, onDone) => {
+    if (sessionEndedRef.current || !url) {
+      onDone?.()
+      return
+    }
+    stopBotAudio()
+    const audio = new Audio(url)
+    botAudioRef.current = audio
+    audio.onended = () => {
+      if (sessionEndedRef.current) return
+      botAudioRef.current = null
+      onDone?.()
+    }
+    audio.onerror = () => {
+      botAudioRef.current = null
+      if (!sessionEndedRef.current) onDone?.()
+    }
+    audio.play().catch(() => {
+      if (!sessionEndedRef.current) onDone?.()
+    })
+  }
+
+  const mapServerMessages = (list) =>
+    (list || []).map((m, i) => ({
+      id: m.turn_number != null ? `t${m.turn_number}-${m.role}` : `${m.role}-${i}`,
+      role: m.role,
+      content: m.content,
+      audio_url: m.audio_url,
+      signals: m.signals,
+    }))
+
+  const applyMessagesFromDetail = (data) => {
+    if (data.messages?.length) {
+      setMessages(mapServerMessages(data.messages))
+      const lastBot = [...data.messages].reverse().find((m) => m.role === "bot")
+      if (lastBot?.audio_url) setAudioUrl(lastBot.audio_url)
+    }
+    if (data.turn_count != null) setTurn(data.turn_count)
+    if (data.phase) {
+      const idx = PHASES.indexOf(data.phase)
+      if (idx >= 0) setCurrentPhase(idx)
+    }
+  }
+
+  const refreshMessagesFromServer = async () => {
+    const result = await getCandidateInterviewDetail(interviewId)
+    const data = result.data
+    setInterviewDetail(data)
+    applyMessagesFromDetail(data)
+    return data
+  }
+
+  const interviewLanguage = (detail) => {
+    const raw = (detail?.language || "").toLowerCase()
+    if (raw.startsWith("fr")) return "fr"
+    if (raw.startsWith("en")) return "en"
+    return null
+  }
+
+  const beginInterviewSession = async (lang, detail = interviewDetail) => {
+    if (startLockRef.current) return
+    if (!canStartInterview(detail?.scheduled_at)) {
+      setToast({
+        type: "error",
+        message: `Interview available on ${formatInterviewStartLabel(detail?.scheduled_at)}`,
+      })
+      setStage("waiting")
+      return
+    }
+    startLockRef.current = true
+    sessionEndedRef.current = false
+    markLiveSession()
+    setSelectedLanguage(lang)
+    try {
+      setIsProcessing(true)
+      await startInterview(interviewId, { language: lang })
+      const refreshed = await refreshMessagesFromServer()
+
+      setStage("recording")
+
+      const playUrl =
+        refreshed.messages?.length
+          ? [...refreshed.messages].reverse().find((m) => m.role === "bot")?.audio_url
+          : null
+
+      const afterBotAudio = () => {
+        if (sessionEndedRef.current) return
+        setThinkTimeLeft(10)
+        setIsThinking(true)
+      }
+      if (playUrl) {
+        playBotAudio(playUrl, afterBotAudio)
+      } else {
+        afterBotAudio()
+      }
+    } catch (err) {
+      startLockRef.current = false
+      markSessionClosed()
+      endRequestedRef.current = false
+      setToast({ type: "error", message: err.response?.data?.detail || "Failed to start interview" })
+      setStage(detail?.messages?.length ? "error" : "language-select")
+      console.error(err)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
   const loadInterviewDetail = async () => {
+    setStage("loading")
+    startLockRef.current = false
+    sessionEndedRef.current = false
     try {
       const result = await getCandidateInterviewDetail(interviewId)
-      setInterviewDetail(result.data)
+      const data = result.data
+      setInterviewDetail(data)
 
-      if (result.data.candidate_response === "REFUSED" || result.data.status === "CANCELLED") {
-        // Auto-redirect when loading a refused interview
+      if (data.candidate_response === "REFUSED" || data.status === "CANCELLED") {
         setToast({ type: "info", message: "This interview invitation was declined" })
-        setTimeout(() => {
-          navigate("/candidate/interviews")
-        }, 2000)
-      } else if (result.data.candidate_response === "ACCEPTED") {
-        setStage("language-select")
+        setTimeout(() => navigate("/candidate/interviews"), 2000)
+      } else if (data.status === "COMPLETED") {
+        setToast({ type: "info", message: "This interview is already completed" })
+        setStage("complete")
+      } else if (data.status === "IN_PROGRESS") {
+        setToast({
+          type: "info",
+          message: "This interview is already in progress and cannot be resumed.",
+        })
+        setStage("error")
+        setTimeout(() => navigate("/candidate/interviews"), 2500)
+      } else if (data.candidate_response === "ACCEPTED") {
+        const lang = interviewLanguage(data)
+        if (lang) setSelectedLanguage(lang)
+        if (!canStartInterview(data.scheduled_at)) {
+          setStage("waiting")
+        } else if (lang && data.scheduled_at) {
+          setStage("starting")
+          beginInterviewSession(lang, data)
+        } else {
+          setStage("language-select")
+        }
       } else {
         setStage("invitation")
       }
     } catch (err) {
       setToast({ type: "error", message: "Failed to load interview invitation" })
       console.error(err)
-      setStage("complete")
+      setStage("error")
     }
+  }
+
+  const recordingErrorMsg = (key) => {
+    const fr = selectedLanguage === "fr"
+    const messages = {
+      denied: fr ? "Accès caméra/micro refusé" : "Camera/microphone access denied",
+      tooSmall: fr
+        ? "Enregistrement trop court ou vide. Réessayez en parlant clairement."
+        : "Recording too short or empty. Please try again and speak clearly.",
+      startFailed: fr ? "Impossible de démarrer l'enregistrement" : "Could not start recording",
+    }
+    return messages[key] || messages.startFailed
   }
 
   const initCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          width: { ideal: 1280 }, 
-          height: { ideal: 720 },
-          facingMode: "user",
-          frameRate: { ideal: 30 }
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 16000,
         },
-        audio: true
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user",
+          frameRate: { ideal: 15, max: 24 },
+        },
       })
       streamRef.current = stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream
       }
 
-      mediaRecorderRef.current = new MediaRecorder(stream)
+      const mimeType = resolveRecordingMimeType()
+      recorderMimeRef.current = mimeType || RECORDING_MIME_FALLBACK
+      const recorderOptions = { videoBitsPerSecond: VIDEO_BITS_PER_SECOND }
+      if (mimeType) recorderOptions.mimeType = mimeType
+
+      mediaRecorderRef.current = new MediaRecorder(stream, recorderOptions)
       mediaRecorderRef.current.ondataavailable = (e) => {
-        chunksRef.current.push(e.data)
+        if (e.data?.size > 0) chunksRef.current.push(e.data)
       }
       mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "video/webm" })
-        submitTurn(blob)
+        if (sessionEndedRef.current) {
+          chunksRef.current = []
+          return
+        }
+        const blob = new Blob(chunksRef.current, { type: recorderMimeRef.current })
         chunksRef.current = []
+        if (blob.size < MIN_RECORDING_BYTES) {
+          setIsProcessing(false)
+          setThinkTimeLeft(10)
+          setIsThinking(true)
+          setToast({ type: "error", message: recordingErrorMsg("tooSmall") })
+          return
+        }
+        submitTurn(blob)
       }
     } catch (err) {
-      setToast({ type: "error", message: "Camera access denied" })
+      setToast({ type: "error", message: recordingErrorMsg("denied") })
       console.error(err)
     }
   }
@@ -147,7 +432,20 @@ export default function InterviewRoom() {
       await respondToCandidateInterview(interviewId, payload)
       if (action === "ACCEPTED") {
         setToast({ type: "success", message: "Invitation accepted" })
-        setStage("language-select")
+        const scheduled = interviewDetail?.scheduled_at
+        const lang = interviewLanguage(interviewDetail)
+        if (!canStartInterview(scheduled)) {
+          setStage("waiting")
+        } else if (lang && scheduled) {
+          setStage("starting")
+          beginInterviewSession(lang, {
+            ...interviewDetail,
+            candidate_response: "ACCEPTED",
+            scheduled_at: scheduled,
+          })
+        } else {
+          setStage("language-select")
+        }
       } else {
         setToast({ type: "success", message: "Invitation refused. Redirecting..." })
         // Auto-redirect after 1.5 seconds
@@ -164,72 +462,63 @@ export default function InterviewRoom() {
   }
 
   const handleLanguageSelect = async (lang) => {
-    setSelectedLanguage(lang)
+    if (!canStartInterview(interviewDetail?.scheduled_at)) {
+      setToast({
+        type: "error",
+        message: `Interview available on ${formatInterviewStartLabel(interviewDetail?.scheduled_at)}`,
+      })
+      return
+    }
     try {
       setIsProcessing(true)
-      const result = await startInterview(interviewId, { language: lang })
-      
-      setMessages([
-        { role: "bot", content: result.data.bot_message, audio_url: result.data.audio_url }
-      ])
-      setAudioUrl(result.data.audio_url)
-      setTurn(result.data.turn)
-      
-      const phaseIndex = PHASES.indexOf(result.data.phase)
-      setCurrentPhase(phaseIndex >= 0 ? phaseIndex : 0)
-
-      setStage("ready")
-      setToast({ type: "success", message: "Ready to start" })
-
+      await updateInterviewLanguage(interviewId, { language: lang })
+      setInterviewDetail((prev) => (prev ? { ...prev, language: lang } : prev))
+      setStage("starting")
+      await beginInterviewSession(lang)
     } catch (err) {
-      setToast({ type: "error", message: "Failed to load interview" })
+      setToast({ type: "error", message: err.response?.data?.detail || "Failed to save language" })
       console.error(err)
     } finally {
       setIsProcessing(false)
     }
   }
 
-  const handleStartInterviewButton = () => {
-    setStage("recording")
-    // Play opening question audio
-    if (audioUrl) {
-      const audio = new Audio(audioUrl)
-      audio.onended = () => {
-        setThinkTimeLeft(10)
-        setIsThinking(true)
-      }
-      audio.play().catch(e => {
-        console.error("Could not play intro audio:", e)
-        setThinkTimeLeft(10)
-        setIsThinking(true)
-      })
-    } else {
-      setThinkTimeLeft(10)
-      setIsThinking(true)
-    }
-  }
-
   const startRecording = () => {
+    if (sessionEndedRef.current) return
     chunksRef.current = []
     setRecordTimeLeft(120)
     try {
-      mediaRecorderRef.current?.start()
+      mediaRecorderRef.current?.start(RECORDING_TIMESLICE_MS)
       setIsRecording(true)
-    } catch(err) {
+    } catch (err) {
       console.error(err)
-      setToast({ type: "error", message: "Could not start recording" })
+      setToast({ type: "error", message: recordingErrorMsg("startFailed") })
     }
   }
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.stop()
-    }
+  const stopRecording = async () => {
+    const recorder = mediaRecorderRef.current
     setIsRecording(false)
+    if (!recorder || recorder.state !== "recording") {
+      return
+    }
     setIsProcessing(true)
+    try {
+      recorder.requestData()
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      recorder.stop()
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    } catch (err) {
+      console.error(err)
+      setIsProcessing(false)
+      setThinkTimeLeft(10)
+      setIsThinking(true)
+      setToast({ type: "error", message: recordingErrorMsg("startFailed") })
+    }
   }
 
   const submitTurn = async (videoBlob) => {
+    if (sessionEndedRef.current) return
     try {
       const formData = new FormData()
       formData.append("audio_file", videoBlob, "recording.webm")
@@ -237,40 +526,34 @@ export default function InterviewRoom() {
 
       const res = await submitInterviewTurn(interviewId, formData)
       const data = res.data
-      
-      setTranscript(data.candidate_transcript)
-      setMessages([...messages, 
-        { role: "candidate", content: data.candidate_transcript, signals: data.signals },
-        { role: "bot", content: data.bot_response, audio_url: data.audio_url }
-      ])
-      setAudioUrl(data.audio_url)
-      setTurn(data.turn)
-      setCurrentPhase(PHASES.indexOf(data.phase))
 
-      // Play bot audio automatically
-      if (data.audio_url) {
-        const audio = new Audio(data.audio_url)
-        audio.onended = () => {
-          if (!data.should_end) {
-            // Start 10s thinking timer when audio finishes
-            setThinkTimeLeft(10)
-            setIsThinking(true)
-          }
-        }
-        audio.play().catch(e => {
-          console.error("Could not play audio:", e)
-          if (!data.should_end) {
-            setThinkTimeLeft(10)
-            setIsThinking(true)
-          }
-        })
-      } else if (!data.should_end) {
-        setThinkTimeLeft(10)
-        setIsThinking(true)
-      }
+      if (sessionEndedRef.current) return
+
+      setTranscript(data.candidate_transcript)
+      await refreshMessagesFromServer()
+      if (sessionEndedRef.current) return
+
+      setAudioUrl(data.audio_url)
 
       if (data.should_end) {
+        teardownInterviewSession()
+        endRequestedRef.current = true
+        try {
+          await endInterview(interviewId)
+        } catch (endErr) {
+          console.error(endErr)
+        }
         setStage("complete")
+        loadInterviewReport()
+      } else if (data.audio_url) {
+        playBotAudio(data.audio_url, () => {
+          if (sessionEndedRef.current) return
+          setThinkTimeLeft(10)
+          setIsThinking(true)
+        })
+      } else {
+        setThinkTimeLeft(10)
+        setIsThinking(true)
       }
 
       setToast({ type: "success", message: "Turn processed" })
@@ -282,18 +565,110 @@ export default function InterviewRoom() {
     }
   }
 
+  const loadInterviewReport = async () => {
+    setLoadingReport(true)
+    try {
+      const res = await getInterviewScores(interviewId)
+      setInterviewReport(res.data)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoadingReport(false)
+    }
+  }
+
   const handleEndInterview = async () => {
+    teardownInterviewSession()
+    endRequestedRef.current = true
     try {
       await endInterview(interviewId)
       setStage("complete")
+      setToast({ type: "success", message: "Interview ended" })
+      loadInterviewReport()
     } catch (err) {
       setToast({ type: "error", message: "Failed to end interview" })
     }
   }
 
+  useEffect(() => {
+    if (stage === "complete" || stage === "error") {
+      teardownInterviewSession()
+    }
+  }, [stage])
+
   return (
     <CandidateLayout>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+
+        {stage === "loading" && (
+          <div className="flex min-h-screen items-center justify-center p-6">
+            <div className="page-glass max-w-md p-8 text-center shadow-xl">
+              <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-violet-600" role="status" aria-label="Loading" />
+              <h2 className="text-xl font-bold text-gray-800">Loading interview…</h2>
+            </div>
+          </div>
+        )}
+
+        {(stage === "complete" || stage === "error") && (
+          <div className="flex min-h-screen items-center justify-center p-6">
+            <div className="page-glass max-w-lg w-full p-8 shadow-xl">
+              <h2 className="text-xl font-bold text-gray-800 mb-2 text-center">
+                {stage === "complete" ? "Interview finished" : "Could not open interview"}
+              </h2>
+              <p className="text-sm text-gray-600 mb-6 text-center">
+                {stage === "complete"
+                  ? "Thank you for completing your interview."
+                  : "Please try again from My Interviews."}
+              </p>
+
+              {stage === "complete" && (
+                <div className="mb-6 text-left">
+                  {loadingReport && (
+                    <p className="text-sm text-gray-500 text-center">Loading your evaluation…</p>
+                  )}
+                  {!loadingReport && interviewReport && (
+                    <div className="rounded-xl bg-violet-50 border border-violet-100 p-4 space-y-3">
+                      <p className="text-sm font-bold text-violet-900">
+                        Overall score: {Math.round(interviewReport.overall_score)}%
+                      </p>
+                      <div className="grid grid-cols-3 gap-2 text-xs text-gray-700">
+                        <span>Communication: {interviewReport.communication_score}/10</span>
+                        <span>Technical: {interviewReport.technical_score}/10</span>
+                        <span>Motivation: {interviewReport.motivation_score}/10</span>
+                      </div>
+                      {interviewReport.summary && (
+                        <p className="text-sm text-gray-700">{interviewReport.summary}</p>
+                      )}
+                      {interviewReport.strengths?.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-600">Strengths</p>
+                          <ul className="text-xs text-gray-600 list-disc pl-4">
+                            {interviewReport.strengths.slice(0, 3).map((s, i) => (
+                              <li key={i}>{s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {!loadingReport && !interviewReport && (
+                    <p className="text-sm text-gray-500 text-center">
+                      Your evaluation report will be ready shortly. Check back from My Interviews.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => navigate("/candidate/interviews")}
+                className="w-full rounded-lg bg-violet-600 px-6 py-3 font-semibold text-white hover:bg-violet-700"
+              >
+                Back to My Interviews
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Invitation Stage */}
         {stage === "invitation" && (
@@ -306,7 +681,7 @@ export default function InterviewRoom() {
 
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-5 text-sm text-blue-900">
                 <p className="font-semibold">Scheduled at</p>
-                <p>{interviewDetail?.scheduled_at ? new Date(interviewDetail.scheduled_at).toLocaleString() : "To be confirmed"}</p>
+                <p>{interviewDetail?.scheduled_at ? formatInterviewStartLabel(interviewDetail.scheduled_at) : "To be confirmed"}</p>
                 <p className="mt-2 text-xs text-blue-700">
                   Please confirm your attendance or propose a new time if you are unavailable.
                 </p>
@@ -350,7 +725,40 @@ export default function InterviewRoom() {
           </div>
         )}
         
-        {/* Language Selection Stage */}
+        {/* Waiting until scheduled time */}
+        {stage === "waiting" && (
+          <div className="flex items-center justify-center min-h-screen p-6">
+            <div className="page-glass shadow-xl p-8 max-w-md w-full mx-4 text-center">
+              <h2 className="text-3xl font-bold text-gray-800 mb-2">Interview scheduled</h2>
+              <p className="text-gray-600 mb-4">
+                Your interview opens on the scheduled day. You can start anytime that day.
+              </p>
+              <p className="text-lg font-semibold text-blue-800 mb-6">
+                {formatInterviewStartLabel(interviewDetail?.scheduled_at)}
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate("/candidate/interviews")}
+                className="w-full py-3 px-6 rounded-lg font-semibold bg-gray-200 hover:bg-gray-300 text-gray-800"
+              >
+                Back to my interviews
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Starting — brief load while session opens (language already chosen on My Interviews) */}
+        {stage === "starting" && (
+          <div className="flex min-h-screen items-center justify-center p-6">
+            <div className="page-glass max-w-md p-8 text-center shadow-xl">
+              <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-violet-600" role="status" aria-label="Loading" />
+              <h2 className="text-xl font-bold text-gray-800">Starting interview…</h2>
+              <p className="mt-2 text-sm text-gray-600">Please allow camera and microphone access when prompted.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Language — only if not set during day scheduling */}
         {stage === "language-select" && (
           <div className="flex items-center justify-center min-h-screen">
             <div className="page-glass shadow-xl p-8 max-w-md w-full mx-4">
@@ -395,25 +803,6 @@ export default function InterviewRoom() {
           </div>
         )}
 
-        {/* Ready Stage */}
-        {stage === "ready" && (
-          <div className="flex items-center justify-center min-h-screen">
-            <div className="page-glass shadow-xl p-8 max-w-md w-full mx-4 text-center">
-              <h2 className="text-3xl font-bold text-gray-800 mb-2">Ready to Start</h2>
-              <p className="text-gray-600 mb-8">
-                Your interview is loaded. Ensure your microphone and camera are working properly.
-              </p>
-              <button
-                onClick={handleStartInterviewButton}
-                className="w-full py-4 px-6 rounded-lg font-bold text-lg transition-all
-                  bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg"
-              >
-                ▶️ Start Interview
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Recording Stage */}
         {stage === "recording" && (
           <div className="p-8 max-w-4xl mx-auto">
@@ -448,41 +837,59 @@ export default function InterviewRoom() {
                 </div>
 
                 {/* Recording Controls */}
-                <div className="flex gap-4 items-center">
-                  {isThinking ? (
-                    <div className="flex-1 py-4 bg-orange-100 border-2 border-orange-500 text-orange-800 font-bold rounded-lg text-center flex items-center justify-center gap-3">
-                      <div className="w-8 h-8 rounded-full border-4 border-orange-500 border-t-transparent animate-spin"></div>
-                      <span className="text-xl">{thinkTimeLeft}s</span>
-                      <span>{selectedLanguage === "fr" ? "Réflexion en cours..." : "Thinking time..."}</span>
-                    </div>
-                  ) : isRecording ? (
-                    <div className="flex-1 flex gap-4">
-                      <div className="flex-1 py-3 bg-red-100 border border-red-300 text-red-800 font-bold rounded-lg flex items-center justify-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-red-600 animate-pulse"></span>
-                        {selectedLanguage === "fr" ? "Enregistrement" : "Recording"}: {Math.floor(recordTimeLeft / 60)}:{(recordTimeLeft % 60).toString().padStart(2, '0')}
+                <div className="flex flex-col gap-3">
+                  <div
+                    className={`min-h-[3.25rem] flex items-center justify-center rounded-lg border px-4 py-3 text-center font-semibold ${
+                      isThinking
+                        ? "border-orange-300 bg-orange-50 text-orange-800"
+                        : isRecording
+                          ? "border-red-300 bg-red-50 text-red-800"
+                          : "border-gray-200 bg-gray-50 text-gray-600"
+                    }`}
+                  >
+                    {isThinking ? (
+                      <div className="flex items-center justify-center gap-3">
+                        <div className="h-8 w-8 shrink-0 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" aria-hidden="true" />
+                        <span className="text-xl tabular-nums">{thinkTimeLeft}s</span>
+                        <span>{selectedLanguage === "fr" ? "Réflexion en cours..." : "Thinking time..."}</span>
                       </div>
-                      <button
-                        onClick={stopRecording}
-                        className="py-3 px-8 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition-all"
-                      >
-                        {selectedLanguage === "fr" ? "Terminer" : "Finish Answer"}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex-1 py-3 bg-gray-100 text-gray-500 font-bold rounded-lg text-center">
-                      {selectedLanguage === "fr" ? "En attente de la question..." : "Waiting for question..."}
-                    </div>
-                  )}
+                    ) : isRecording ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="h-3 w-3 animate-pulse rounded-full bg-red-600" />
+                        <span>
+                          {selectedLanguage === "fr" ? "Enregistrement" : "Recording"}:{" "}
+                          {Math.floor(recordTimeLeft / 60)}:
+                          {(recordTimeLeft % 60).toString().padStart(2, "0")}
+                        </span>
+                      </div>
+                    ) : isProcessing ? (
+                      <span>
+                        {selectedLanguage === "fr" ? "Traitement en cours..." : "Processing your answer..."}
+                      </span>
+                    ) : (
+                      <span className="text-gray-500">
+                        {selectedLanguage === "fr" ? "En attente de la question..." : "Waiting for question..."}
+                      </span>
+                    )}
+                  </div>
 
-                  {!isThinking && !isRecording && (
+                  <div className="flex flex-wrap gap-3">
                     <button
+                      type="button"
+                      onClick={stopRecording}
+                      disabled={!isRecording || isProcessing}
+                      className="min-w-[10rem] flex-1 py-3 px-6 rounded-lg font-bold shadow-md transition-all bg-blue-600 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none"
+                    >
+                      {selectedLanguage === "fr" ? "Terminer la réponse" : "Finish Answer"}
+                    </button>
+                    <button
+                      type="button"
                       onClick={handleEndInterview}
-                      disabled={isProcessing}
-                      className="py-3 px-6 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg disabled:opacity-50"
+                      className="min-w-[10rem] flex-1 py-3 px-6 rounded-lg font-bold shadow-md transition-all bg-gray-700 text-white hover:bg-gray-800"
                     >
                       {selectedLanguage === "fr" ? "Quitter l'entretien" : "End Interview"}
                     </button>
-                  )}
+                  </div>
                 </div>
               </div>
 
@@ -490,8 +897,11 @@ export default function InterviewRoom() {
               <div className="page-glass p-4 max-h-96 overflow-y-auto">
                 <h3 className="font-bold text-lg mb-4">Transcript</h3>
                 <div className="space-y-4">
-                  {messages.map((msg, i) => (
-                    <div key={i} className={`p-3 rounded-xl ${msg.role === "bot" ? "page-glass-inset bg-blue-50/40" : "page-glass-inset"}`}>
+                  {messages.length === 0 && (
+                    <p className="text-sm text-gray-500">Conversation will appear here…</p>
+                  )}
+                  {messages.map((msg) => (
+                    <div key={msg.id} className={`p-3 rounded-xl ${msg.role === "bot" ? "page-glass-inset bg-blue-50/40" : "page-glass-inset"}`}>
                       <p className="text-xs font-bold text-gray-600 mb-1">{msg.role.toUpperCase()}</p>
                       <p className="text-sm text-gray-800">{msg.content}</p>
                       {msg.audio_url && (
@@ -499,6 +909,7 @@ export default function InterviewRoom() {
                       )}
                     </div>
                   ))}
+                  <div ref={transcriptEndRef} />
                 </div>
               </div>
             </div>

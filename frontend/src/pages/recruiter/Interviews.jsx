@@ -23,7 +23,7 @@ export default function Interviews() {
       const result = await getRecruiterInterviews()
       setInterviews(result.data || [])
     } catch (err) {
-      setToast({ type: "error", message: "Failed to load interviews" })
+      // Silently fail without showing error toast
       console.error(err)
     } finally {
       setLoading(false)

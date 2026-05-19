@@ -5,12 +5,51 @@ import { getPublicJobs, matchJobsByCV, matchJobsByProfile, getMyApplications } f
 import { useAuth } from "../../context/AuthContext"
 import Navbar from "../../components/Navbar"
 import Toast from "../../components/Toast"
+import ApplyJobModal from "../../components/public/ApplyJobModal"
 import GlassSelect from "../../components/shared/GlassSelect"
+import {
+  MIN_MATCH_PERCENTAGE,
+  MATCH_CATEGORY_KEYS,
+  MATCH_CATEGORY_META,
+  getMatchCategoryKey,
+  getMatchCategoryStyle,
+  filterRelevantRankedJobs,
+  filterJobsByCategory,
+  countJobsByCategory,
+} from "../../constants/matchCategories"
 
 const SESSION_KEY = "talentos_ranked_jobs"
 const SESSION_CV_KEY = "talentos_cv_name"
+const SESSION_CV_DATA_KEY = "talentos_cv_data"
 const SESSION_APPLIED_KEY = "talentos_applied_jobs"
-const MIN_MATCH_PERCENTAGE = 40 // Minimum semantic matching threshold to apply
+
+/** Drop jobs past closing_date (backend also hides via is_active). */
+function isPublicJobOpen(job) {
+  if (!job?.closing_date) return true
+  const closing = new Date(job.closing_date)
+  return !Number.isNaN(closing.getTime()) && closing > new Date()
+}
+
+function filterOpenPublicJobs(jobList) {
+  return (jobList || []).filter(isPublicJobOpen)
+}
+
+function MatchDot({ color, size = 10, ring = true }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        background: color,
+        flexShrink: 0,
+        display: "inline-block",
+        boxShadow: ring ? `0 0 0 2px ${color}33` : "none",
+      }}
+    />
+  )
+}
 
 export default function Jobs() {
   const navigate = useNavigate()
@@ -19,7 +58,9 @@ export default function Jobs() {
   const [jobs, setJobs] = useState(() => {
     try {
       const stored = sessionStorage.getItem(SESSION_KEY)
-      return stored ? JSON.parse(stored) : []
+      return stored
+        ? filterOpenPublicJobs(filterRelevantRankedJobs(JSON.parse(stored)))
+        : []
     } catch { return [] }
   })
   const [search, setSearch] = useState("")
@@ -29,7 +70,6 @@ export default function Jobs() {
   const [matching, setMatching] = useState(false)
   const [matchingMode, setMatchingMode] = useState(() => !!sessionStorage.getItem(SESSION_KEY))
   const [matchedCvName, setMatchedCvName] = useState(() => sessionStorage.getItem(SESSION_CV_KEY) || "")
-  const [featuredJobs, setFeaturedJobs] = useState([])
   const [toast, setToast] = useState(null)
   const [appliedJobIds, setAppliedJobIds] = useState(() => {
     try {
@@ -37,6 +77,24 @@ export default function Jobs() {
       return stored ? new Set(JSON.parse(stored)) : new Set()
     } catch { return new Set() }
   })
+  const [selectedMatchCategory, setSelectedMatchCategory] = useState("all")
+  const [hiddenMatchCount, setHiddenMatchCount] = useState(0)
+  const [applyJob, setApplyJob] = useState(null)
+
+  const rankedJobs = matchingMode ? jobs : []
+  const filteredJobs = matchingMode
+    ? filterJobsByCategory(rankedJobs, selectedMatchCategory)
+    : jobs
+  const categoryCounts = matchingMode ? countJobsByCategory(jobs) : null
+
+  const applyRankedJobs = (rawJobs) => {
+    const all = filterOpenPublicJobs(rawJobs || [])
+    const relevant = filterRelevantRankedJobs(all)
+    setHiddenMatchCount(all.length - relevant.length)
+    setJobs(relevant)
+    setSelectedMatchCategory("all")
+    return relevant
+  }
 
   // ── Fetch normally if no ranked jobs in session ──
   useEffect(() => {
@@ -54,7 +112,7 @@ export default function Jobs() {
       if (contractType) params.append("contract_type", contractType)
       const res = await getPublicJobs(Object.fromEntries(params.entries()))
       const data = res.data
-      setJobs(data.jobs || [])
+      setJobs(filterOpenPublicJobs(data.jobs || []))
       setMatchingMode(false)
       setMatchedCvName("")
     } catch {
@@ -93,11 +151,11 @@ export default function Jobs() {
         if (contractType) params.append("contract_type", contractType)
         const res = await matchJobsByProfile(Object.fromEntries(params.entries()))
         const data = res.data || {}
-        const ranked = data.jobs || []
+        const ranked = applyRankedJobs(data.jobs || [])
         if (ranked.length > 0) {
-          setJobs(ranked)
           setMatchingMode(true)
           setMatchedCvName(data.profile?.name || "")
+          sessionStorage.setItem(SESSION_KEY, JSON.stringify(ranked))
         } else {
           setMatchingMode(false)
           setMatchedCvName("")
@@ -118,13 +176,6 @@ export default function Jobs() {
       clearRanking()
     }
   }, [user, matchingMode])
-
-  // Fetch featured jobs
-  useEffect(() => {
-    getPublicJobs()
-      .then((res) => setFeaturedJobs((res.data.jobs || []).slice(0, 3)))
-      .catch(() => {})
-  }, [])
 
   // ── Fetch applied jobs for logged-in candidates ──
   useEffect(() => {
@@ -157,8 +208,11 @@ export default function Jobs() {
   const clearRanking = () => {
     sessionStorage.removeItem(SESSION_KEY)
     sessionStorage.removeItem(SESSION_CV_KEY)
+    sessionStorage.removeItem(SESSION_CV_DATA_KEY)
     setMatchingMode(false)
     setMatchedCvName("")
+    setSelectedMatchCategory("all")
+    setHiddenMatchCount(0)
     fetchJobs()
   }
 
@@ -175,16 +229,15 @@ export default function Jobs() {
       if (contractType) params.append("contract_type", contractType)
       const res = await matchJobsByCV(formData, Object.fromEntries(params.entries()))
       const data = res.data || {}
-      const rankedJobs = data.jobs || []
+      const rankedJobs = applyRankedJobs(data.jobs || [])
 
       if (rankedJobs.length > 0) {
-        setJobs(rankedJobs)
         setMatchingMode(true)
         setMatchedCvName(data.cv?.extracted_name || "")
 
-        // Persist in sessionStorage
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(rankedJobs))
         sessionStorage.setItem(SESSION_CV_KEY, data.cv?.extracted_name || "")
+        sessionStorage.setItem(SESSION_CV_DATA_KEY, JSON.stringify(data.cv || {}))
 
         // Show appropriate toast
         if (data.cv?.account_exists) {
@@ -245,9 +298,11 @@ export default function Jobs() {
         <div className="animate-float" style={{ position: "absolute", width: 70, height: 70, background: "linear-gradient(135deg,#f97316,#ef4444)", borderRadius: "40% 60% 50% 30%", bottom: 20, right: 300, opacity: 0.6, filter: "blur(2px)", animationDelay: "3s" }}/>
         </div>
 
-        <h1 style={{ fontSize: "48px", fontWeight: 200, color: "white", marginBottom: "16px", position: "relative", zIndex: 10, lineHeight: 1.2 }}>
-          {t.findDreamJob}
-        </h1>
+        <div className="jobs-hero-heading">
+          <h1 className="dancing-title jobs-hero-title">{t.findDreamJob}</h1>
+          <div className="jobs-hero-heading__rule" aria-hidden />
+          <p className="jobs-hero-subtitle">{t.uploadCvFirst}</p>
+        </div>
 
         {/* Upload CV button */}
         <div style={{ position: "relative", zIndex: 10, marginBottom: "32px" }}>
@@ -281,14 +336,29 @@ export default function Jobs() {
           background: "white", borderRadius: 12, overflow: "visible",
           boxShadow: "0 8px 24px rgba(15,23,42,0.08)", position: "relative", zIndex: 10
         }}>
-          <input value={search} onChange={(e) => setSearch(e.target.value)}
+          <input
+            id="job-search-query"
+            name="job-search-query"
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder={t.jobTitle}
+            autoComplete="off"
             className="rounded-s-xl"
             style={{ flex: 2, padding: "16px 20px", border: "none", outline: "none", fontSize: 14, color: "#374151" }}
           />
           <div style={{ width: 1, background: "#e5e7eb", margin: "8px 0" }}/>
-          <input value={location} onChange={(e) => setLocation(e.target.value)}
+          <input
+            id="job-search-city"
+            name="job-search-city"
+            type="search"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
             placeholder={t.location}
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore
+            aria-label={t.location}
             style={{ flex: 1, padding: "16px 20px", border: "none", outline: "none", fontSize: 14, color: "#374151" }}
           />
           <div style={{ width: 1, background: "#e5e7eb", margin: "8px 0" }}/>
@@ -313,58 +383,127 @@ export default function Jobs() {
       </section>
 
       {/* ── JOB LISTINGS ── */}
-      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
+      <section style={{ maxWidth: 1200, margin: "0 auto", padding: "40px 20px" }}>
         <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 24 }}>
-          {jobs.length} {t.jobsAvailable}
+          {matchingMode ? filteredJobs.length : jobs.length} {t.jobsAvailable}
+          {matchingMode && hiddenMatchCount > 0 && (
+            <span style={{ color: "#9ca3af", marginLeft: 8 }}>
+              · {hiddenMatchCount} {t.jobsHiddenLowMatch}
+            </span>
+          )}
         </p>
 
-        {/* Ranking banner */}
         {matchingMode && (
-          <div style={{
-            marginBottom: 16, background: "linear-gradient(135deg, #f5f3ff, #ede9fe)",
-            border: "1px solid #e9d5ff", borderRadius: 14, padding: "14px 18px",
-            display: "flex", alignItems: "center", justifyContent: "space-between"
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 20 }}>🎯</span>
-              <span style={{ color: "#5b21b6", fontSize: 13, fontWeight: 700 }}>
-                Ranked by CV match{matchedCvName ? ` for ${matchedCvName}` : ""}
-              </span>
+          <div className="jobs-rank-banner">
+            <div className="jobs-rank-banner__copy">
+              <span className="jobs-rank-banner__label">{t.rankedByCv}</span>
+              {matchedCvName && (
+                <p className="jobs-rank-banner__title">
+                  <span className="jobs-rank-banner__name">{matchedCvName}</span>
+                </p>
+              )}
             </div>
-            <button
-              onClick={clearRanking}
-              style={{
-                background: "rgba(91,33,182,0.1)", border: "1px solid #c4b5fd",
-                borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600,
-                color: "#5b21b6", cursor: "pointer", transition: "all 0.2s ease"
-              }}
-              onMouseOver={(e) => { e.currentTarget.style.background = "#5b21b6"; e.currentTarget.style.color = "white" }}
-              onMouseOut={(e) => { e.currentTarget.style.background = "rgba(91,33,182,0.1)"; e.currentTarget.style.color = "#5b21b6" }}
-            >
-              ✕ Clear Ranking
+            <button type="button" className="jobs-rank-banner__clear" onClick={clearRanking}>
+              {t.clearRanking}
             </button>
           </div>
         )}
 
+        <div
+          style={{
+            display: "flex",
+            flexDirection: isRTL ? "row-reverse" : "row",
+            gap: 28,
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+          }}
+        >
+          {matchingMode ? (
+            // ── MATCH CATEGORY FILTER ──
+            <aside
+              style={{
+                width: "100%",
+                maxWidth: 280,
+                flexShrink: 0,
+                position: "sticky",
+                top: 88,
+              }}
+            >
+              <div className="jobs-match-panel">
+                <h2 className="jobs-match-panel__title">{t.matchLevels}</h2>
+                <div className="jobs-match-panel__list">
+                  {MATCH_CATEGORY_KEYS.map((key) => {
+                    const cat = MATCH_CATEGORY_META[key]
+                    const isSelected = selectedMatchCategory === key
+                    const count = categoryCounts?.[key] ?? 0
+
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        className={`jobs-match-filter${isSelected ? " jobs-match-filter--active" : ""}`}
+                        style={{ "--match-accent": cat.dotColor }}
+                        onClick={() => setSelectedMatchCategory(key)}
+                      >
+                        <MatchDot color={cat.dotColor} size={12} />
+                        <span className="jobs-match-filter__body">
+                          <span className="jobs-match-filter__label">{t[cat.labelKey]}</span>
+                          <span className="jobs-match-filter__range">{cat.rangeLabel}</span>
+                        </span>
+                        <span className="jobs-match-filter__count">{count}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                {categoryCounts?.hidden > 0 && (
+                  <p className="jobs-match-panel__hidden">
+                    <MatchDot color="#dc2626" size={8} />
+                    {categoryCounts.hidden} {t.jobsHiddenLowMatch}
+                  </p>
+                )}
+              </div>
+            </aside>
+          ) : null}
+
+          <div style={{ flex: 1, minWidth: 280 }}>
         {loading || matching ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px 0", gap: 16 }}>
             <div style={{ width: 32, height: 32, border: "3px solid #7B5AC8", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }}/>
             {matching && <p style={{ color: "#7B5AC8", fontSize: 13, fontWeight: 600 }}>Analyzing your CV with AI...</p>}
           </div>
-        ) : jobs.length === 0 ? (
+        ) : (matchingMode ? filteredJobs.length === 0 : jobs.length === 0) ? (
           <div style={{ textAlign: "center", padding: "80px 0", color: "#9ca3af" }}>
             <p style={{ fontSize: 48, marginBottom: 16 }}>🔍</p>
-            <p>{t.noJobs}</p>
+            <p>{matchingMode && jobs.length > 0 ? t.noJobsInCategory : t.noJobs}</p>
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(340px,1fr))", gap: 20 }}>
-            {jobs.map((job) => (
+            {filteredJobs.map((job) => {
+              const matchCategoryKey = getMatchCategoryKey(job.match_percentage)
+              const matchStyle = matchingMode && matchCategoryKey ? getMatchCategoryStyle(matchCategoryKey) : null
+              const bandMeta = matchCategoryKey && matchCategoryKey !== "toobad" ? MATCH_CATEGORY_META[matchCategoryKey] : null
+
+              return (
               <div key={job.job_id} className="card-hover" style={{
                 background: "white", borderRadius: 16, border: "1px solid #f3f4f6",
                 padding: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
-                transition: "all 0.3s ease", cursor: "pointer"
+                transition: "all 0.3s ease", cursor: "pointer", position: "relative"
               }} onClick={() => navigate(`/jobs/${job.job_id}`)}>
-                <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", marginBottom: 16 }}>
+                {matchingMode && matchStyle && bandMeta && (
+                  <div style={{
+                    position: "absolute", top: 12, right: 12,
+                    display: "flex", alignItems: "center", gap: 6,
+                    background: matchStyle.bg, border: `1px solid ${matchStyle.border}`,
+                    borderRadius: 20, padding: "4px 10px",
+                  }}>
+                    <MatchDot color={bandMeta.dotColor} size={10} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: matchStyle.text }}>
+                      {t[matchStyle.labelKey]}
+                    </span>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", marginBottom: 16, paddingRight: matchingMode ? 108 : 0 }}>
                   <div>
                     <h3 style={{ fontSize: 17, fontWeight: 700, color: "#111827", marginBottom: 4 }}>{job.title}</h3>
                     <p style={{ fontSize: 13, color: "#7B5AC8", fontWeight: 600 }}>{job.company_name}</p>
@@ -376,33 +515,18 @@ export default function Jobs() {
                   }}>{job.contract_type}</span>
                 </div>
 
-                {/* Match percentage badge - Only show if CV uploaded (matchingMode) */}
-                {matchingMode && typeof job.match_percentage === "number" && (
+                {matchingMode && typeof job.match_percentage === "number" && matchStyle && (
                   <div style={{
                     marginBottom: 12, borderRadius: 12, padding: "10px 12px",
-                    background: job.match_percentage >= 75 ? "linear-gradient(135deg, #ecfdf5, #d1fae5)"
-                      : job.match_percentage >= MIN_MATCH_PERCENTAGE ? "linear-gradient(135deg, #ecfeff, #cffafe)"
-                      : "linear-gradient(135deg, #fef3c7, #fde68a)",
-                    border: job.match_percentage >= 75 ? "1px solid #6ee7b7"
-                      : job.match_percentage >= MIN_MATCH_PERCENTAGE ? "1px solid #67e8f9"
-                      : "1px solid #fcd34d"
+                    background: matchStyle.bg,
+                    border: `1px solid ${matchStyle.border}`,
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 16 }}>
-                        {job.match_percentage >= 75 ? "🟢" : job.match_percentage >= MIN_MATCH_PERCENTAGE ? "🔵" : "🟡"}
-                      </span>
-                      <span style={{
-                        fontSize: 14, fontWeight: 800,
-                        color: job.match_percentage >= 75 ? "#059669" : job.match_percentage >= MIN_MATCH_PERCENTAGE ? "#0891b2" : "#d97706"
-                      }}>
-                        {job.match_percentage.toFixed(1)}% Match
+                      <MatchDot color={bandMeta?.dotColor || matchStyle.text} size={12} />
+                      <span style={{ fontSize: 14, fontWeight: 800, color: matchStyle.text }}>
+                        {job.match_percentage.toFixed(1)}% {t.matchPercentLabel}
                       </span>
                     </div>
-                    {job.match_percentage < MIN_MATCH_PERCENTAGE && (
-                      <div style={{ fontSize: 11, color: "#d97706", marginTop: 4, fontWeight: 600 }}>
-                        Minimum {MIN_MATCH_PERCENTAGE}% match required to apply
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -446,7 +570,7 @@ export default function Jobs() {
                         <button
                           onClick={(e) => { 
                             e.stopPropagation()
-                            if (canApply) navigate(`/jobs/${job.job_id}/apply`) 
+                            if (canApply) setApplyJob({ id: job.job_id, title: job.title }) 
                           }}
                           disabled={!canApply}
                           title={needsCV ? "Upload your CV first" : lowMatch ? `Minimum ${MIN_MATCH_PERCENTAGE}% match required` : ""}
@@ -472,33 +596,14 @@ export default function Jobs() {
                   })()}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
-        {/* ── Featured / Similar Jobs ── */}
-        {!matchingMode && featuredJobs.length > 0 && (
-          <div style={{ marginTop: 60 }}>
-            <h2 className="dancing-title" style={{ fontSize: 32, fontWeight: 700, color: "#111827", marginBottom: 24, textAlign: "center" }}>
-              {t.featuredJobs}
-            </h2>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 20 }}>
-              {featuredJobs.map((job) => (
-                <div key={job.job_id} className="card-hover" style={{
-                  background: "linear-gradient(135deg,#f5f3ff,#ede9fe)", borderRadius: 16,
-                  padding: 24, border: "1px solid #e9d5ff", cursor: "pointer"
-                }} onClick={() => navigate(`/jobs/${job.job_id}`)}>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1f2937", marginBottom: 6 }}>{job.title}</h3>
-                  <p style={{ fontSize: 13, color: "#7B5AC8", fontWeight: 600, marginBottom: 12 }}>{job.company_name}</p>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {job.location && <span style={{ fontSize: 11, color: "#6b7280" }}>📍 {job.location}</span>}
-                    <span style={{ fontSize: 11, color: "#6b7280" }}>📋 {job.contract_type}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
-        )}
+        </div>
+
       </section>
 
       {/* ── FOOTER ── */}
@@ -508,6 +613,27 @@ export default function Jobs() {
       }}>
         <p style={{ fontSize: 13, opacity: 0.7 }}>{t.copyright}</p>
       </footer>
+
+      <ApplyJobModal
+        jobId={applyJob?.id}
+        jobTitle={applyJob?.title}
+        open={Boolean(applyJob)}
+        onClose={() => setApplyJob(null)}
+        cvData={(() => {
+          try {
+            const stored = sessionStorage.getItem(SESSION_CV_DATA_KEY)
+            return stored ? JSON.parse(stored) : null
+          } catch { return null }
+        })()}
+        onApplied={(jobId) => {
+          setAppliedJobIds((prev) => {
+            const next = new Set(prev)
+            next.add(jobId)
+            sessionStorage.setItem(SESSION_APPLIED_KEY, JSON.stringify([...next]))
+            return next
+          })
+        }}
+      />
     </div>
   )
 }

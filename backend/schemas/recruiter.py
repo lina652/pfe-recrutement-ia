@@ -9,13 +9,6 @@ class ContractType(str, Enum):
     INTERNSHIP = "INTERNSHIP"
     FREELANCE = "FREELANCE"
 
-class ApplicationStatus(str, Enum):
-    PENDING = "PENDING"
-    UNDER_REVIEW = "UNDER_REVIEW"
-    SHORTLISTED = "SHORTLISTED"
-    REJECTED = "REJECTED"
-    ACCEPTED = "ACCEPTED"
-
 # ─────────────────────────────
 # Job Offer
 # ─────────────────────────────
@@ -74,37 +67,6 @@ class JobOfferListResponse(BaseModel):
     jobs: List[JobOfferResponse]
 
 # ─────────────────────────────
-# Application
-# ─────────────────────────────
-
-class ApplicationResponse(BaseModel):
-    app_id: str
-    candidate_id: str
-    job_id: str
-    job_title: Optional[str] = None
-    company_name: Optional[str] = None
-    candidate_name: Optional[str] = None
-    status: ApplicationStatus
-    cover_letter: Optional[str] = None
-    final_score: Optional[float] = None
-    ai_recommendation: Optional[str] = None
-    hr_override: bool
-    hr_override_reason: Optional[str] = None
-    submission_date: datetime
-    last_updated: datetime
-
-    class Config:
-        from_attributes = True
-
-class ApplicationListResponse(BaseModel):
-    total: int
-    applications: List[ApplicationResponse]
-
-class OverrideRequest(BaseModel):
-    status: ApplicationStatus
-    reason: str
-
-# ─────────────────────────────
 # Dashboard Stats
 # ─────────────────────────────
 
@@ -132,8 +94,16 @@ class RequirementRequestForHR(BaseModel):
     requirements: str
     required_skills: Optional[str] = None
     experience_years: Optional[int] = None
+    experience_level: Optional[str] = None
     education_level: Optional[str] = None
     location: Optional[str] = None
+    location_type: Optional[str] = None
+    languages_required: Optional[str] = None
+    languages_other: Optional[str] = None
+    soft_skills: Optional[str] = None
+    soft_skills_other: Optional[str] = None
+    certifications: Optional[str] = None
+    certifications_other: Optional[str] = None
     contract_type: Optional[str] = None
     department: Optional[str] = None
     salary_range: Optional[str] = None
@@ -148,6 +118,9 @@ class RequirementRequestForHR(BaseModel):
 class RequirementRequestListForHR(BaseModel):
     total: int
     requests: List[RequirementRequestForHR]
+
+class AcceptRequirementRequest(BaseModel):
+    salary_range: str
 
 class RejectRequirementRequest(BaseModel):
     reason: str

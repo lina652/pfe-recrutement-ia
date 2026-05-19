@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import RecruiterLayout from "../../components/recruiter/RecruiterLayout"
+import RequestMoreModal from "../../components/manager/RequestMoreModal"
 import API from "../../api/authApi"
 import { dashboardGlassClass } from "../../components/shared/DashboardOverviewKit"
 import PageHeader, { PAGE_EYEBROWS } from "../../components/shared/PageHeader"
@@ -22,6 +23,8 @@ export default function JobOffers() {
   const [contractFilter, setContractFilter] = useState("ALL")
   const [success, setSuccess] = useState("")
   const [error, setError] = useState("")
+  const [reopenOpen, setReopenOpen] = useState(false)
+  const [reopenJob, setReopenJob] = useState(null)
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -72,10 +75,15 @@ export default function JobOffers() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    if (!form.salary_range?.trim()) {
+      setError("Salary range is required");
+      return;
+    }
     try {
       if (editingJobId) {
-        await API.put(`/recruiter/jobs/${editingJobId}`, form);
-        setSuccess("Job offer updated successfully");
+        // Only update salary when editing
+        await API.put(`/recruiter/jobs/${editingJobId}/salary`, { salary_range: form.salary_range });
+        setSuccess("Job salary updated successfully");
       } else {
         await API.post("/recruiter/jobs", form);
         setSuccess("Job offer created successfully");
@@ -91,13 +99,24 @@ export default function JobOffers() {
     }
   };
 
-  const handleToggle = async (jobId, isActive) => {
-    try {
-      await API.put(`/recruiter/jobs/${jobId}`, { is_active: !isActive })
-      fetchJobs()
-    } catch (err) {
-      console.error(err)
+  const handleToggle = (job) => {
+    if (job.is_active) {
+      API.put(`/recruiter/jobs/${job.job_id}`, { is_active: false })
+        .then(() => fetchJobs())
+        .catch((err) => setError(err.response?.data?.detail || "Failed to close job"))
+      return
     }
+    setReopenJob(job)
+    setReopenOpen(true)
+  }
+
+  const handleReopenSuccess = (data) => {
+    const when = data?.closing_date ? new Date(data.closing_date).toLocaleString() : null
+    setSuccess(when ? `Job reopened. Closes: ${when}` : "Job reopened successfully.")
+    setReopenOpen(false)
+    setReopenJob(null)
+    fetchJobs()
+    setTimeout(() => setSuccess(""), 5000)
   }
 
   const handleDelete = async (jobId) => {
@@ -134,105 +153,11 @@ export default function JobOffers() {
         count={total}
         countLabel="jobs posted"
       >
-        <button
-          type="button"
-          onClick={() => {
-            if (showForm) setEditingJobId(null)
-            setShowForm(!showForm)
-          }}
-          className="rounded-xl bg-green-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-green-800"
-        >
-          {showForm ? "Cancel" : "+ New Job Offer"}
-        </button>
+        {/* Recruiters cannot create jobs directly - only via requirement approval */}
       </PageHeader>
 
       {success && <div className="mx-auto mb-3 max-w-6xl rounded-lg border border-green-200 bg-green-50 p-2.5 text-xs text-green-700">{success}</div>}
       {error && <div className="mx-auto mb-3 max-w-6xl rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">{error}</div>}
-
-      {showForm && (
-        <div className={`mx-auto mb-5 max-w-6xl ${dashboardGlassClass}`}>
-          <h2 className="mb-3 text-base font-semibold text-gray-800">
-            {editingJobId ? "Edit Job Offer" : "Create New Job Offer"}
-          </h2>
-          {/* FIX 2: Changed handleCreate to handleSubmit */}
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-0.5 block text-xs font-medium text-gray-700">Job Title</label>
-                <input
-                  type="text" required
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  className={glassInputClass}
-                  placeholder="e.g. Senior Python Developer"
-                />
-              </div>
-              <div>
-                <label className="mb-0.5 block text-xs font-medium text-gray-700">Location</label>
-                <input
-                  type="text"
-                  value={form.location}
-                  onChange={(e) => setForm({ ...form, location: e.target.value })}
-                  className={glassInputClass}
-                  placeholder="e.g. Tunis, Tunisia"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-0.5 block text-xs font-medium text-gray-700">Contract Type</label>
-                <select
-                  value={form.contract_type}
-                  onChange={(e) => setForm({ ...form, contract_type: e.target.value })}
-                  className={glassInputClass}
-                >
-                  <option value="CDI">CDI</option>
-                  <option value="CDD">CDD</option>
-                  <option value="INTERNSHIP">Internship</option>
-                  <option value="FREELANCE">Freelance</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-0.5 block text-xs font-medium text-gray-700">Salary Range</label>
-                <input
-                  type="text"
-                  value={form.salary_range}
-                  onChange={(e) => setForm({ ...form, salary_range: e.target.value })}
-                  className={glassInputClass}
-                  placeholder="e.g. 2000-3000 TND"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="mb-0.5 block text-xs font-medium text-gray-700">Description</label>
-              <textarea
-                rows={2}
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
-                placeholder="Job description..."
-              />
-            </div>
-            <div>
-              <label className="mb-0.5 block text-xs font-medium text-gray-700">Requirements</label>
-              <textarea
-                rows={2}
-                value={form.requirements}
-                onChange={(e) => setForm({ ...form, requirements: e.target.value })}
-                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
-                placeholder="Required skills and experience..."
-              />
-            </div>
-            <button
-              type="submit"
-              className="rounded-lg bg-green-700 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-green-800"
-            >
-              {/* FIX 3: Dynamic button text */}
-              {editingJobId ? "Update Job Offer" : "Create Job Offer"}
-            </button>
-          </form>
-        </div>
-      )}
 
       <div className="mx-auto mb-5 flex max-w-6xl flex-col items-center gap-4">
         <input
@@ -295,56 +220,110 @@ export default function JobOffers() {
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
               {displayedJobs.map((job) => (
-                <div
-                  key={job.job_id}
-                  className={`flex h-full min-h-[11rem] flex-col !rounded-xl !p-5 ${dashboardGlassClass}`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <h3 className="line-clamp-2 text-base font-semibold text-gray-800">{job.title}</h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                      {job.location || "Remote"} · {job.salary_range || "Salary not specified"}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${CONTRACT_COLORS[job.contract_type]}`}>
-                        {job.contract_type}
-                      </span>
-                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${job.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                        {job.is_active ? "Active" : "Closed"}
-                      </span>
+                <div key={job.job_id}>
+                  {editingJobId === job.job_id && showForm ? (
+                    // Inline Edit Form (Salary Only)
+                    <div className={`flex h-full min-h-[11rem] flex-col !rounded-xl !p-5 !bg-amber-50 border-2 border-amber-300 ${dashboardGlassClass}`}>
+                      <h3 className="text-base font-semibold text-gray-800 mb-3">{job.title}</h3>
+                      <div className="flex-1 space-y-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1.5">Salary Range</label>
+                          <input
+                            type="text"
+                            value={form.salary_range}
+                            onChange={(e) => setForm({ ...form, salary_range: e.target.value })}
+                            placeholder="e.g. 50k-70k EUR"
+                            className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 justify-end mt-3 pt-3 border-t border-amber-200">
+                        <button
+                          onClick={() => {
+                            setShowForm(false)
+                            setEditingJobId(null)
+                            setForm({ title: "", description: "", requirements: "", location: "", contract_type: "CDI", salary_range: "" })
+                          }}
+                          className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleSubmit}
+                          className="rounded-lg bg-amber-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+                        >
+                          Save
+                        </button>
+                      </div>
                     </div>
-                    {job.description && (
-                      <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-gray-600">{job.description}</p>
-                    )}
-                    <p className="mt-2 text-xs text-gray-400">
-                      Posted {new Date(job.posted_date).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-1.5 border-t border-gray-100 pt-3">
-                    <button
-                      onClick={() => handleEditClick(job)}
-                      className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-100"
+                  ) : (
+                    // Normal Job Card
+                    <div
+                      className={`flex h-full min-h-[11rem] flex-col !rounded-xl !p-5 ${dashboardGlassClass}`}
                     >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleToggle(job.job_id, job.is_active)}
-                      className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${job.is_active ? "bg-gray-100 text-gray-600 hover:bg-gray-200" : "bg-green-50 text-green-600 hover:bg-green-100"}`}
-                    >
-                      {job.is_active ? "Close" : "Reopen"}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(job.job_id)}
-                      className="rounded-lg bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-100"
-                    >
-                      Delete
-                    </button>
-                  </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="line-clamp-2 text-base font-semibold text-gray-800">{job.title}</h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                          {job.location || "Remote"} · {job.salary_range || "Salary not specified"}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${CONTRACT_COLORS[job.contract_type]}`}>
+                            {job.contract_type}
+                          </span>
+                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${job.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                            {job.is_active ? "Active" : "Closed"}
+                          </span>
+                        </div>
+                        {job.description && (
+                          <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-gray-600">{job.description}</p>
+                        )}
+                        <p className="mt-2 text-xs text-gray-400">
+                          Posted {new Date(job.posted_date).toLocaleDateString()}
+                          {job.closing_date && (
+                            <> · Closes {new Date(job.closing_date).toLocaleString()}</>
+                          )}
+                        </p>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-1.5 border-t border-gray-100 pt-3">
+                        <button
+                          onClick={() => handleEditClick(job)}
+                          className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-100"
+                        >
+                          Edit Price
+                        </button>
+                        <button
+                          onClick={() => handleToggle(job)}
+                          className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${job.is_active ? "bg-gray-100 text-gray-600 hover:bg-gray-200" : "bg-green-50 text-green-600 hover:bg-green-100"}`}
+                        >
+                          {job.is_active ? "Close" : "Reopen"}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(job.job_id)}
+                          className="rounded-lg bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-100"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </div>
       )}
+      <RequestMoreModal
+        open={reopenOpen}
+        jobId={reopenJob?.job_id}
+        jobTitle={reopenJob?.title}
+        apiPrefix="/recruiter/jobs"
+        apiSuffix="/reopen"
+        onClose={() => {
+          setReopenOpen(false)
+          setReopenJob(null)
+        }}
+        onSuccess={handleReopenSuccess}
+      />
     </RecruiterLayout>
   )
 }

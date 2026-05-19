@@ -17,9 +17,9 @@ def build_vector_store_async(self, job_id: str):
 
         service = get_rag_service()
         service.refresh_vector_store(job_id)
-        vs = service.get_or_build_vector_store(db, job_id)
+        vs, chunks = service.get_or_build_vector_store(db, job_id, force_rebuild=True)
 
-        if vs:
+        if vs and chunks:
             logger.info(f"Vector store built for job {job_id}")
             return {"status": "completed", "job_id": job_id}
         else:

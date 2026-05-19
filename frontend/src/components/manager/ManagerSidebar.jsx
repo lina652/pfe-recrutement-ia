@@ -8,8 +8,8 @@ import { DashboardNavIcon } from "../shared/DashboardNavIcons"
 const links = [
   { to: "/manager/dashboard", label: "Dashboard", icon: "dashboard", badge: true },
   { to: "/manager/jobs", label: "Job Requirements", icon: "briefcase" },
-  { to: "/manager/shortlisted", label: "Shortlisted Candidates", icon: "star" },
   { to: "/manager/selection", label: "Final Selection", icon: "checkCircle" },
+  { to: "/manager/ai", label: "AI Recommendations", icon: "cpu" },
   { to: "/manager/profile", label: "Edit Profile", icon: "pencil" },
 ]
 

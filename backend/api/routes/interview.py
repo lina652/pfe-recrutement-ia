@@ -26,6 +26,7 @@ from schemas.interview_schemas import (
     InterviewCandidateResponseRequest,
     ProposeTimeRequest,
     InterviewCandidateDetail,
+    InterviewMessageItem,
     InterviewStart,
     InterviewMessageResponse,
     InterviewScoreResponse,
@@ -35,7 +36,8 @@ from schemas.interview_schemas import (
     TimeSlot,
     TimeSlotListResponse,
     SelectTimeSlotRequest,
-    SelectTimeSlotResponse
+    SelectTimeSlotResponse,
+    InterviewLanguageUpdate,
 )
 from core.config import settings
 
@@ -47,39 +49,44 @@ logger = logging.getLogger(__name__)
 
 @router.get("/candidate/my-interviews", response_model=list[InterviewListItem])
 def get_candidate_interviews(
-    candidate_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.CANDIDATE)),
 ):
-    """
-    Get all interviews for a candidate.
-    """
+    """Get all interviews for the logged-in candidate."""
     try:
-        interviews = db.query(Interview).filter(
-            Interview.candidate_id == candidate_id
-        ).all()
-        
+        candidate = db.query(Candidate).filter(Candidate.user_id == current_user.user_id).first()
+        if not candidate:
+            return []
+
+        interviews = (
+            db.query(Interview)
+            .filter(Interview.candidate_id == candidate.candidate_id)
+            .order_by(Interview.created_at.desc())
+            .all()
+        )
+
+        candidate_name = f"{current_user.first_name} {current_user.last_name}".strip()
         result = []
         for interview in interviews:
-            # Fetch additional details
-            app = db.query(Application).filter(
-                Application.app_id == interview.application_id
-            ).first()
-            
-            result.append(InterviewListItem(
-                interview_id=interview.interview_id,
-                candidate_name=candidate_id,
-                job_title=app.job_id if app else "Unknown",
-                status=interview.status.value,
-                language=interview.language,
-                created_at=interview.created_at,
-                scheduled_at=interview.scheduled_at,
-                meeting_link=interview.meeting_link,
-                candidate_response=interview.candidate_response,
-                candidate_response_reason=interview.candidate_response_reason,
-                completed_at=interview.completed_at,
-                phase=interview.phase.value
-            ))
-        
+            job = db.query(JobOffer).filter(JobOffer.job_id == interview.job_id).first()
+            result.append(
+                InterviewListItem(
+                    interview_id=interview.interview_id,
+                    candidate_name=candidate_name,
+                    job_title=job.title if job else "Unknown",
+                    status=interview.status.value,
+                    language=interview.language,
+                    created_at=interview.created_at,
+                    scheduled_at=interview.scheduled_at,
+                    meeting_link=interview.meeting_link,
+                    candidate_response=interview.candidate_response,
+                    candidate_response_reason=interview.candidate_response_reason,
+                    completed_at=interview.completed_at,
+                    phase=interview.phase.value,
+                    turn_count=interview.turn_count,
+                )
+            )
+
         return result
     except Exception as e:
         logger.error(f"Error fetching candidate interviews: {str(e)}")
@@ -110,12 +117,30 @@ def start_interview(
 
         if interview.candidate_id != candidate.candidate_id:
             raise HTTPException(status_code=403, detail="Unauthorized")
-        
+
+        from services.interview_scheduling import is_interview_start_allowed
+
+        if interview.status == InterviewStatus.COMPLETED:
+            raise HTTPException(status_code=400, detail="This interview is already completed.")
+        if interview.status == InterviewStatus.IN_PROGRESS:
+            raise HTTPException(
+                status_code=400,
+                detail="This interview is already in progress and cannot be resumed.",
+            )
+        if interview.status != InterviewStatus.INVITED:
+            raise HTTPException(status_code=400, detail="This interview cannot be started.")
+
+        if not is_interview_start_allowed(interview.scheduled_at):
+            raise HTTPException(
+                status_code=400,
+                detail="The interview cannot start before the scheduled day.",
+            )
+
         interview_service = get_interview_service()
         result = interview_service.start_interview(
             db=db,
             interview_id=interview_id,
-            language=request.language
+            language=request.language,
         )
         
         return result
@@ -211,16 +236,39 @@ def end_interview(
 
         if interview.candidate_id != candidate.candidate_id:
             raise HTTPException(status_code=403, detail="Unauthorized")
-        
-        interview.status = "COMPLETED"
+
+        if interview.status == InterviewStatus.COMPLETED:
+            return {
+                "status": "ended",
+                "message": "Interview already completed.",
+            }
+
+        if interview.status != InterviewStatus.IN_PROGRESS:
+            raise HTTPException(
+                status_code=400,
+                detail="Interview is not in progress",
+            )
+
+        ended_early = interview.phase != InterviewPhase.DONE
+        state = dict(interview.session_state or {})
+        if ended_early:
+            state["ended_early"] = True
+            interview.session_state = state
+
+        interview.status = InterviewStatus.COMPLETED
         interview.completed_at = datetime.utcnow()
+        interview.phase = InterviewPhase.DONE
         db.commit()
-        
-        # Generate report
+
         interview_service = get_interview_service()
-        report = interview_service.generate_report(db, interview_id)
-        
-        return {"status": "ended", "report": report}
+        interview_service.ensure_interview_report(
+            db, interview_id, ended_early=ended_early
+        )
+
+        return {
+            "status": "ended",
+            "message": "Interview completed. Thank you for participating.",
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -228,71 +276,95 @@ def end_interview(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/candidate/{interview_id}/scores", response_model=InterviewScoreResponse)
+@router.get("/candidate/{interview_id}/scores", response_model=InterviewReportResponse)
 def get_interview_scores(
     interview_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.CANDIDATE))
 ):
-    """
-    Get scores and feedback for a completed interview (candidate view).
-    """
-    try:
-        candidate = db.query(Candidate).filter(Candidate.user_id == current_user.user_id).first()
-        if not candidate:
-            raise HTTPException(status_code=403, detail="Unauthorized")
+    """Candidate can view their interview evaluation after completion."""
+    from models.interview import InterviewReport
+    from services.interview_service import get_interview_service
 
-        interview = db.query(Interview).filter(
-            Interview.interview_id == interview_id
-        ).first()
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.user_id).first()
+    if not candidate:
+        raise HTTPException(status_code=403, detail="Unauthorized")
 
-        if not interview:
-            raise HTTPException(status_code=404, detail="Interview not found")
+    interview = db.query(Interview).filter(Interview.interview_id == interview_id).first()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    if interview.candidate_id != candidate.candidate_id:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    report = (
+        db.query(InterviewReport)
+        .filter(InterviewReport.interview_id == interview_id)
+        .first()
+    )
 
-        if interview.candidate_id != candidate.candidate_id:
-            raise HTTPException(status_code=403, detail="Unauthorized")
-        
-        report = db.query(InterviewReport).filter(
-            InterviewReport.interview_id == interview_id
-        ).first()
-        
-        if not report:
-            raise HTTPException(status_code=404, detail="Report not available yet")
-        
-        return InterviewScoreResponse(
-            overall_score=report.overall_score,
-            communication_score=report.communication_score,
-            technical_score=report.technical_score,
-            motivation_score=report.motivation_score
+    if interview.status != InterviewStatus.COMPLETED and not report:
+        raise HTTPException(
+            status_code=400,
+            detail="Results are available after the interview is completed",
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching scores for interview {interview_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+
+    french_markers = (
+        "Le ",
+        "La ",
+        "candidat",
+        "compét",
+        "entretien",
+        "travail d'équipe",
+        "recommand",
+    )
+    if report and report.summary and any(marker in report.summary for marker in french_markers):
+        interview_service = get_interview_service()
+        interview_service.generate_report(db, interview_id, force=True)
+        report = (
+            db.query(InterviewReport)
+            .filter(InterviewReport.interview_id == interview_id)
+            .first()
+        )
+
+    if not report and interview.status == InterviewStatus.COMPLETED:
+        ended_early = bool((interview.session_state or {}).get("ended_early"))
+        get_interview_service().ensure_interview_report(
+            db, interview_id, ended_early=ended_early
+        )
+        report = (
+            db.query(InterviewReport)
+            .filter(InterviewReport.interview_id == interview_id)
+            .first()
+        )
+
+    if not report:
+        raise HTTPException(
+            status_code=404,
+            detail="Evaluation report is not ready yet. Please check back shortly.",
+        )
+
+    rec = report.recommendation
+    if hasattr(rec, "value"):
+        rec = rec.value
+
+    return InterviewReportResponse(
+        overall_score=report.overall_score,
+        communication_score=report.communication_score,
+        technical_score=report.technical_score,
+        motivation_score=report.motivation_score,
+        recommendation=rec,
+        strengths=report.strengths or [],
+        weaknesses=report.weaknesses or [],
+        technical_competencies=report.technical_competencies or [],
+        soft_skills=report.soft_skills or {},
+        red_flags=report.red_flags or [],
+        follow_up_questions=report.follow_up_questions or [],
+        summary=report.summary or "",
+    )
 
 
 # ==================== TIME SLOT SELECTION ENDPOINTS ====================
 
-def generate_time_slots(start_date: datetime, days: int = 7) -> list:
-    """Generate interview time slots from 8:00 AM to 5:00 PM every 45 minutes."""
-    slots = []
-    for day_offset in range(days):
-        current_date = start_date + timedelta(days=day_offset)
-        if current_date.weekday() >= 5:  # Skip weekends
-            continue
-        
-        hour = 8
-        minute = 0
-        while hour < 17 or (hour == 17 and minute == 0):
-            slot_time = current_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            slots.append(slot_time)
-            minute += 45
-            if minute >= 60:
-                hour += 1
-                minute -= 60
-    
-    return slots
+from services.interview_scheduling import build_slots_payload, apply_interview_schedule
 
 
 @router.get("/candidate/{interview_id}/time-slots", response_model=TimeSlotListResponse)
@@ -301,7 +373,7 @@ def get_available_time_slots(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.CANDIDATE))
 ):
-    """Get available time slots for an interview (8am-5pm, every 45 minutes, 7 days)."""
+    """Get available interview days (next 7 days, one slot per day)."""
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.user_id).first()
     if not candidate:
         raise HTTPException(status_code=403, detail="Unauthorized")
@@ -316,41 +388,51 @@ def get_available_time_slots(
     if interview.candidate_id != candidate.candidate_id:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
-    # Get job info
     job = db.query(JobOffer).filter(JobOffer.job_id == interview.job_id).first()
     job_title = job.title if job else "Unknown Position"
+    payload = build_slots_payload(db, interview, job_title)
 
-    # Generate time slots for next 7 days
-    start_date = datetime.utcnow() + timedelta(days=1)
-    start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_date = start_date + timedelta(days=7)
-    
-    raw_slots = generate_time_slots(start_date, days=7)
-    
-    # Get already booked slots for this job to exclude them
-    booked_interviews = db.query(Interview).filter(
-        Interview.job_id == interview.job_id,
-        Interview.scheduled_at.isnot(None),
-        Interview.status != InterviewStatus.CANCELLED
-    ).all()
-    booked_times = {i.scheduled_at for i in booked_interviews}
-    
-    slots = []
-    for slot_time in raw_slots:
-        is_available = slot_time not in booked_times
-        slots.append(TimeSlot(
-            datetime=slot_time,
-            formatted=slot_time.strftime("%A, %B %d at %H:%M"),
-            available=is_available
-        ))
-    
+    slots = [
+        TimeSlot(
+            datetime=s["datetime"],
+            formatted=s["formatted"],
+            available=s["available"],
+        )
+        for s in payload["slots"]
+    ]
+
     return TimeSlotListResponse(
         interview_id=interview_id,
         job_title=job_title,
         slots=slots,
-        week_start=start_date,
-        week_end=end_date
+        week_start=payload["week_start"],
+        week_end=payload["week_end"],
     )
+
+
+@router.patch("/candidate/{interview_id}/language")
+def update_interview_language(
+    interview_id: str,
+    payload: InterviewLanguageUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.CANDIDATE)),
+):
+    """Set interview language (English or French) before the session starts."""
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.user_id).first()
+    if not candidate:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    interview = db.query(Interview).filter(Interview.interview_id == interview_id).first()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    if interview.candidate_id != candidate.candidate_id:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    if interview.status not in (InterviewStatus.INVITED,):
+        raise HTTPException(status_code=400, detail="Language can only be changed before the interview starts")
+
+    interview.language = payload.language
+    db.commit()
+    return {"interview_id": interview_id, "language": interview.language}
 
 
 @router.post("/candidate/{interview_id}/select-time", response_model=SelectTimeSlotResponse)
@@ -360,9 +442,7 @@ def select_interview_time_slot(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.CANDIDATE))
 ):
-    """Select an interview time slot from the available options."""
-    from services.mailer import send_email
-    
+    """Select an interview day from the available options."""
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.user_id).first()
     if not candidate:
         raise HTTPException(status_code=403, detail="Unauthorized")
@@ -377,102 +457,26 @@ def select_interview_time_slot(
     if interview.candidate_id != candidate.candidate_id:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
-    # Check if time slot is still available
-    existing = db.query(Interview).filter(
-        Interview.job_id == interview.job_id,
-        Interview.scheduled_at == payload.selected_datetime,
-        Interview.status != InterviewStatus.CANCELLED,
-        Interview.interview_id != interview_id
-    ).first()
-    
-    if existing:
-        raise HTTPException(status_code=409, detail="This time slot is no longer available")
-
-    # Update interview with selected time
-    interview.scheduled_at = payload.selected_datetime
-    interview.candidate_response = "ACCEPTED"
-    interview.candidate_responded_at = datetime.utcnow()
-    if not interview.meeting_link:
-        interview.meeting_link = f"{settings.FRONTEND_URL}/candidate/interview/{interview.interview_id}"
-    
-    # Get job info
-    job = db.query(JobOffer).filter(JobOffer.job_id == interview.job_id).first()
-    job_title = job.title if job else "Unknown Position"
-    
-    # Create notification for candidate confirming the time
-    schedule_text = payload.selected_datetime.strftime("%A, %B %d, %Y at %H:%M UTC")
-    confirmation_notification = Notification(
-        notification_id=str(uuid.uuid4()),
-        user_id=current_user.user_id,
-        company_id=job.company_id if job else None,
-        title="Interview Time Confirmed",
-        message=f"Your interview for {job_title} has been scheduled for {schedule_text}. Please be ready 5 minutes before. Link: {interview.meeting_link}",
-        type="INTERVIEW_CONFIRMED",
-        reference_id=interview.interview_id,
-        is_read=False
-    )
-    db.add(confirmation_notification)
-    
-    # Notify recruiter about the time selection
-    if job:
-        recruiter_notification = Notification(
-            notification_id=str(uuid.uuid4()),
-            user_id=job.posted_by,
-            company_id=job.company_id,
-            title="Interview Time Selected",
-            message=f"{current_user.first_name} {current_user.last_name} has selected {schedule_text} for their interview for {job_title}.",
-            type="INTERVIEW_TIME_SELECTED",
-            reference_id=interview.interview_id,
-            is_read=False
+    try:
+        result = apply_interview_schedule(
+            db,
+            interview,
+            payload.selected_datetime,
+            via_email=False,
+            language=payload.language,
         )
-        db.add(recruiter_notification)
-    
-    db.commit()
-    
-    # Send confirmation email to candidate
-    subject = f"Interview Confirmed - {job_title} | TalentOs"
-    body = f"""Hello {current_user.first_name},
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-Your interview for {job_title} has been confirmed!
+    scheduled = result["scheduled_at"]
+    if isinstance(scheduled, str):
+        scheduled = datetime.fromisoformat(scheduled)
 
-Date & Time: {schedule_text}
-Meeting Link: {interview.meeting_link}
-
-Please be ready 5 minutes before your scheduled time.
-
-Best regards,
-{settings.APP_NAME}"""
-
-    html_body = f"""<html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-    <div style="background:linear-gradient(135deg,#7B5AC8,#9683EC);padding:30px;border-radius:12px 12px 0 0;">
-        <h1 style="color:white;margin:0;font-family:cursive;">Talent<span style="color:#f97316;">Os</span></h1>
-    </div>
-    <div style="padding:30px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
-        <p>Hello <strong>{current_user.first_name}</strong>,</p>
-        <p style="font-size:18px;color:#16a34a;font-weight:bold;">✅ Interview Confirmed!</p>
-        <div style="background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px;padding:15px;margin:20px 0;">
-            <p style="margin:0;"><strong>Position:</strong> {job_title}</p>
-            <p style="margin:8px 0 0 0;"><strong>Date & Time:</strong> {schedule_text}</p>
-        </div>
-        <div style="margin:20px 0;">
-            <a href="{interview.meeting_link}" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#7B5AC8,#9683EC);color:#fff;border-radius:8px;text-decoration:none;font-weight:bold;">
-                Join Interview
-            </a>
-        </div>
-        <p style="color:#6b7280;">Please be ready 5 minutes before your scheduled time.</p>
-        <hr style="border:none;border-top:1px solid #f3f4f6;margin:20px 0;"/>
-        <p style="color:#9ca3af;font-size:12px;">Best regards,<br/>{settings.APP_NAME}</p>
-    </div>
-    </body></html>"""
-
-    send_email(current_user.email, subject, body, html=html_body)
-    logger.info(f"Interview time confirmation sent to {current_user.email}")
-    
     return SelectTimeSlotResponse(
-        message="Interview time successfully selected",
-        interview_id=interview_id,
-        scheduled_at=payload.selected_datetime,
-        meeting_link=interview.meeting_link
+        message=result["message"],
+        interview_id=result["interview_id"],
+        scheduled_at=scheduled,
+        meeting_link=result["meeting_link"],
     )
 
 
@@ -539,6 +543,24 @@ def get_candidate_interview_detail(
     if not candidate or candidate.candidate_id != interview.candidate_id:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
+    messages = []
+    if interview.status in (InterviewStatus.IN_PROGRESS, InterviewStatus.COMPLETED):
+        rows = (
+            db.query(InterviewMessage)
+            .filter(InterviewMessage.interview_id == interview_id)
+            .order_by(InterviewMessage.turn_number.asc())
+            .all()
+        )
+        messages = [
+            InterviewMessageItem(
+                role=r.role,
+                content=r.content,
+                audio_url=r.audio_url,
+                turn_number=r.turn_number,
+            )
+            for r in rows
+        ]
+
     return InterviewCandidateDetail(
         interview_id=interview.interview_id,
         application_id=interview.application_id,
@@ -551,7 +573,10 @@ def get_candidate_interview_detail(
         candidate_response_reason=interview.candidate_response_reason,
         candidate_responded_at=interview.candidate_responded_at,
         auto_scheduled=interview.auto_scheduled,
-        candidate_availability_comment=interview.candidate_availability_comment
+        candidate_availability_comment=interview.candidate_availability_comment,
+        phase=interview.phase.value if interview.phase else None,
+        turn_count=interview.turn_count,
+        messages=messages,
     )
 
 

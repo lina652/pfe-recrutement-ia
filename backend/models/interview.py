@@ -59,7 +59,9 @@ class Interview(Base):
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     auto_scheduled = Column(Boolean, default=False)
+    schedule_token = Column(String(64), nullable=True, unique=True, index=True)
     candidate_availability_comment = Column(Text, nullable=True)
+    session_state = Column(JSON, nullable=True)  # silences, identity_warnings, etc.
 
 
 class InterviewMessage(Base):

@@ -143,12 +143,17 @@ def trigger_job_closing(
         raise HTTPException(status_code=404, detail="Job not found")
     
     try:
-        # Trigger the closing task immediately
-        process_job_closing.delay(job_id)
-        
+        from services.job_closing_service import execute_job_closing
+
+        job.is_active = False
+        job.closing_processed = False
+        db.commit()
+
+        result = execute_job_closing(db, job_id)
         return {
-            "message": f"Job closing triggered for: {job.title}",
-            "job_id": job_id
+            "message": f"Job closing processed for: {job.title}",
+            "job_id": job_id,
+            "result": result,
         }
     except Exception as e:
         logger.error(f"Failed to trigger job closing: {str(e)}")

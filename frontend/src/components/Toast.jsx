@@ -2,33 +2,37 @@ import { useState, useEffect } from "react"
 
 const VARIANTS = {
   success: {
-    bg: "linear-gradient(135deg, #059669, #10b981)",
-    icon: "✅",
-    border: "#34d399",
+    icon: "✓",
+    bgColor: "rgba(34, 197, 94, 0.15)",
+    textColor: "#16a34a",
+    border: "rgba(34, 197, 94, 0.3)",
   },
   info: {
-    bg: "linear-gradient(135deg, #7B5AC8, #9683EC)",
-    icon: "💡",
-    border: "#a78bfa",
+    icon: "ℹ",
+    bgColor: "rgba(59, 130, 246, 0.15)",
+    textColor: "#1e40af",
+    border: "rgba(59, 130, 246, 0.3)",
   },
   error: {
-    bg: "linear-gradient(135deg, #dc2626, #ef4444)",
-    icon: "❌",
-    border: "#f87171",
+    icon: "✕",
+    bgColor: "rgba(239, 68, 68, 0.15)",
+    textColor: "#b91c1c",
+    border: "rgba(239, 68, 68, 0.3)",
   },
-  welcome: {
-    bg: "linear-gradient(135deg, #7B5AC8, #9683EC)",
-    icon: "👋",
-    border: "#a78bfa",
+  accountCreated: {
+    icon: "✓",
+    bgColor: "rgba(168, 85, 247, 0.15)",
+    textColor: "#7c3aed",
+    border: "rgba(168, 85, 247, 0.3)",
   },
 }
 
-export default function Toast({ message, variant = "success", onClose, duration = 4500 }) {
+export default function Toast({ message, variant = "success", onClose, duration = 3500 }) {
   const [visible, setVisible] = useState(true)
   const [exiting, setExiting] = useState(false)
 
   useEffect(() => {
-    const exitTimer = setTimeout(() => setExiting(true), duration - 500)
+    const exitTimer = setTimeout(() => setExiting(true), duration - 300)
     const closeTimer = setTimeout(() => {
       setVisible(false)
       onClose?.()
@@ -48,54 +52,65 @@ export default function Toast({ message, variant = "success", onClose, duration 
       style={{
         position: "fixed",
         top: 24,
-        right: 24,
+        left: "50%",
+        transform: "translateX(-50%)",
         zIndex: 9999,
         animation: exiting
-          ? "toast-fade-out 0.5s ease forwards"
-          : "toast-slide-in 0.5s cubic-bezier(0.21, 1.02, 0.73, 1) forwards",
+          ? "toast-fade-out 0.3s ease forwards"
+          : "toast-slide-down 0.4s ease forwards",
       }}
     >
       <div
         style={{
-          background: v.bg,
-          color: "white",
-          borderRadius: 16,
-          padding: "16px 24px",
+          background: v.bgColor,
+          color: v.textColor,
+          borderRadius: 8,
+          padding: "12px 24px",
           display: "flex",
           alignItems: "center",
-          gap: 12,
-          boxShadow: "0 12px 40px rgba(0,0,0,0.2)",
+          gap: 10,
+          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)",
           border: `1px solid ${v.border}`,
-          maxWidth: 420,
-          minWidth: 280,
-          backdropFilter: "blur(12px)",
+          backdropFilter: "blur(10px)",
+          maxWidth: 500,
+          minWidth: 300,
         }}
       >
-        <span style={{ fontSize: 22, flexShrink: 0 }}>{v.icon}</span>
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, lineHeight: 1.5 }}>
+        <span style={{ 
+          fontSize: 18, 
+          flexShrink: 0,
+          fontWeight: "bold",
+        }}>
+          {v.icon}
+        </span>
+        <p style={{ 
+          margin: 0, 
+          fontSize: 13, 
+          fontWeight: 500, 
+          lineHeight: 1.5,
+        }}>
           {message}
         </p>
         <button
           onClick={() => {
             setExiting(true)
-            setTimeout(() => { setVisible(false); onClose?.() }, 400)
+            setTimeout(() => { setVisible(false); onClose?.() }, 300)
           }}
           style={{
-            background: "rgba(255,255,255,0.2)",
+            background: "transparent",
             border: "none",
-            borderRadius: "50%",
-            width: 24,
-            height: 24,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            color: v.textColor,
             cursor: "pointer",
-            color: "white",
-            fontSize: 12,
-            fontWeight: 700,
+            fontSize: 18,
+            fontWeight: 600,
             flexShrink: 0,
-            marginLeft: 4,
+            marginLeft: 8,
+            opacity: 0.6,
+            transition: "opacity 0.2s",
+            padding: 0,
           }}
+          onMouseEnter={(e) => e.target.style.opacity = "1"}
+          onMouseLeave={(e) => e.target.style.opacity = "0.6"}
         >
           ✕
         </button>

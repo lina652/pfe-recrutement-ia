@@ -32,6 +32,27 @@ from schemas.rag_schemas import (
 router = APIRouter(prefix="/rag", tags=["rag"])
 logger = logging.getLogger(__name__)
 
+RAG_ROLES = (UserRole.RECRUITER, UserRole.HIRING_MANAGER)
+
+
+def _get_job_for_rag_user(db: Session, user: User, job_id: str) -> JobOffer | None:
+    job = db.query(JobOffer).filter(JobOffer.job_id == job_id).first()
+    if not job:
+        return None
+    if user.role == UserRole.RECRUITER:
+        return job if job.posted_by == user.user_id else None
+    if user.role == UserRole.HIRING_MANAGER:
+        return job if job.company_id == user.company_id else None
+    return None
+
+
+def _jobs_query_for_rag_user(db: Session, user: User):
+    if user.role == UserRole.RECRUITER:
+        return db.query(JobOffer).filter(JobOffer.posted_by == user.user_id)
+    if user.role == UserRole.HIRING_MANAGER:
+        return db.query(JobOffer).filter(JobOffer.company_id == user.company_id)
+    return db.query(JobOffer).filter(False)
+
 
 # ==================== CONVERSATIONS ====================
 
@@ -39,15 +60,11 @@ logger = logging.getLogger(__name__)
 def create_conversation(
     payload: RAGConversationCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.RECRUITER))
+    current_user: User = Depends(require_role(*RAG_ROLES)),
 ):
     """Create a new RAG conversation."""
     try:
-        job = db.query(JobOffer).filter(
-            JobOffer.job_id == payload.job_id,
-            JobOffer.posted_by == current_user.user_id
-        ).first()
-        
+        job = _get_job_for_rag_user(db, current_user, payload.job_id)
         if not job:
             raise HTTPException(status_code=404, detail="Job not found or access denied")
         
@@ -83,9 +100,9 @@ def list_conversations(
     job_id: str = None,
     favorites_only: bool = False,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.RECRUITER))
+    current_user: User = Depends(require_role(*RAG_ROLES)),
 ):
-    """List recruiter's conversations with filtering."""
+    """List user's RAG conversations with filtering."""
     try:
         query = db.query(RAGConversation).filter(
             RAGConversation.recruiter_id == current_user.user_id
@@ -125,7 +142,7 @@ def list_conversations(
 def get_conversation(
     conversation_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.RECRUITER))
+    current_user: User = Depends(require_role(*RAG_ROLES)),
 ):
     """Get conversation with full message history."""
     try:
@@ -172,7 +189,7 @@ def update_conversation(
     conversation_id: str,
     payload: RAGConversationUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.RECRUITER))
+    current_user: User = Depends(require_role(*RAG_ROLES)),
 ):
     """Update conversation title or favorite status."""
     try:
@@ -227,7 +244,7 @@ def update_conversation(
 def delete_conversation(
     conversation_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.RECRUITER))
+    current_user: User = Depends(require_role(*RAG_ROLES)),
 ):
     """Delete a conversation and all its messages."""
     try:
@@ -263,7 +280,7 @@ def send_message(
     conversation_id: str,
     payload: RAGMessageRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.RECRUITER))
+    current_user: User = Depends(require_role(*RAG_ROLES)),
 ):
     """Send a message and get RAG response saved to conversation."""
     try:
@@ -275,12 +292,7 @@ def send_message(
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
         
-        # Verify job access
-        job = db.query(JobOffer).filter(
-            JobOffer.job_id == conversation.job_id,
-            JobOffer.posted_by == current_user.user_id
-        ).first()
-        
+        job = _get_job_for_rag_user(db, current_user, conversation.job_id)
         if not job:
             raise HTTPException(status_code=403, detail="Access denied for this job")
         
@@ -293,12 +305,14 @@ def send_message(
         )
         db.add(user_msg)
         
-        # Get RAG response
         rag_service = get_rag_service()
+        rag_service.refresh_vector_store(conversation.job_id)
+
         answer = rag_service.chat(
             db=db,
             job_id=conversation.job_id,
-            question=payload.question
+            question=payload.question,
+            language="en",
         )
         
         # Save AI response
@@ -336,29 +350,23 @@ def send_message(
 def chat_with_rag(
     request: RAGChatRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.RECRUITER))
+    current_user: User = Depends(require_role(*RAG_ROLES)),
 ):
     """
     Legacy endpoint: Chat with RAG system (without conversation history).
     """
     try:
-        # Verify job exists and recruiter has access
-        job = db.query(JobOffer).filter(
-            JobOffer.job_id == request.job_id
-        ).first()
-        
+        job = _get_job_for_rag_user(db, current_user, request.job_id)
         if not job:
-            raise HTTPException(status_code=404, detail="Job not found")
-        
-        if job.posted_by != current_user.user_id:
-            raise HTTPException(status_code=403, detail="Access denied for this job")
+            raise HTTPException(status_code=404, detail="Job not found or access denied")
         
         # Get RAG service and answer question
         rag_service = get_rag_service()
         answer = rag_service.chat(
             db=db,
             job_id=request.job_id,
-            question=request.question
+            question=request.question,
+            language="en",
         )
         
         return RAGChatResponse(
@@ -377,29 +385,36 @@ def chat_with_rag(
 @router.get("/jobs", response_model=list[RAGJobInfo])
 def get_recruiter_jobs_with_candidates(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role(UserRole.RECRUITER))
+    current_user: User = Depends(require_role(*RAG_ROLES)),
 ):
     """
     Get list of jobs with application and interview counts (for RAG job selector).
     """
     try:
-        # Get recruiter's jobs
-        jobs = db.query(JobOffer).filter(
-            JobOffer.posted_by == current_user.user_id
-        ).all()
+        jobs = _jobs_query_for_rag_user(db, current_user).all()
         
+        from models.interview import InterviewStatus
+
         result = []
         for job in jobs:
-            # Count applications
-            app_count = db.query(Application).filter(
-                Application.job_id == job.job_id
-            ).count()
-            
-            # Count completed interviews
-            interview_count = db.query(Interview).filter(
-                Interview.job_id == job.job_id,
-                Interview.status == "COMPLETED"
-            ).count()
+            app_rows = (
+                db.query(Application)
+                .filter(Application.job_id == job.job_id)
+                .all()
+            )
+            app_count = len(app_rows)
+
+            app_ids = {a.app_id for a in app_rows}
+            interview_count = 0
+            if app_ids:
+                interview_count = (
+                    db.query(Interview)
+                    .filter(
+                        Interview.application_id.in_(app_ids),
+                        Interview.status == InterviewStatus.COMPLETED,
+                    )
+                    .count()
+                )
             
             result.append(RAGJobInfo(
                 job_id=job.job_id,
@@ -417,10 +432,10 @@ def get_recruiter_jobs_with_candidates(
 @router.get("/suggestions/{language}")
 def get_suggested_questions(
     language: str = "en",
-    current_user: User = Depends(require_role(UserRole.RECRUITER))
+    current_user: User = Depends(require_role(*RAG_ROLES)),
 ):
     """
-    Get suggested RAG questions for recruiter.
+    Get suggested RAG questions.
     """
     try:
         rag_service = get_rag_service()

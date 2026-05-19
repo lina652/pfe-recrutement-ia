@@ -6,6 +6,50 @@
   font-family: 'Dancing Script', cursive !important;
 }
 
+/* Jobs hero — script title (like Landing “Our Services”) */
+.jobs-hero-heading {
+  position: relative;
+  z-index: 10;
+  margin-bottom: 28px;
+  text-align: center;
+}
+
+.jobs-hero-title {
+  font-size: clamp(2.5rem, 6vw, 3.5rem);
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 14px;
+  line-height: 1.15;
+  text-shadow: 0 2px 24px rgba(15, 23, 42, 0.2);
+}
+
+.jobs-hero-heading__rule {
+  width: 60px;
+  height: 3px;
+  margin: 0 auto 16px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.35), #ffffff, rgba(255, 255, 255, 0.35));
+}
+
+.jobs-hero-subtitle {
+  display: inline-block;
+  max-width: 520px;
+  margin: 0;
+  padding: 10px 22px;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.12);
+}
+
 /* ── Animations ── */
 @keyframes float {
   0%, 100% { transform: translateY(0px) rotate(0deg); }
@@ -38,13 +82,25 @@
 .animate-slide-down { animation: slideDown 0.2s ease-out forwards; }
 
 /* ── Toast Animations ── */
-@keyframes toast-slide-in {
-  from { opacity: 0; transform: translateX(80px) scale(0.95); }
-  to { opacity: 1; transform: translateX(0) scale(1); }
+@keyframes toast-slide-down {
+  from { 
+    opacity: 0; 
+    transform: translateY(-20px);
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0);
+  }
 }
 @keyframes toast-fade-out {
-  from { opacity: 1; transform: translateX(0) scale(1); }
-  to { opacity: 0; transform: translateX(80px) scale(0.9); }
+  from { 
+    opacity: 1; 
+    transform: translateY(0);
+  }
+  to { 
+    opacity: 0; 
+    transform: translateY(-20px);
+  }
 }
 
 /* ── Glassmorphism ── */
@@ -63,6 +119,13 @@
   box-shadow: 0 12px 40px rgba(15, 23, 42, 0.1);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
+}
+
+/* Opaque banner for modals (no glass / blur bleed-through) */
+.modal-alert-solid {
+  background-color: #ffffff !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .page-glass-thead {
@@ -110,6 +173,172 @@
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(123, 90, 200, 0.5); }
+
+/* ── Jobs page: CV ranking banner & match filters ── */
+.jobs-rank-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  border: 1px solid #e9d5ff;
+  background: linear-gradient(135deg, #faf8ff 0%, #f3eeff 55%, #ede9fe 100%);
+  box-shadow: 0 4px 20px rgba(123, 90, 200, 0.08);
+}
+
+.jobs-rank-banner__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.jobs-rank-banner__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7c3aed;
+}
+
+.jobs-rank-banner__title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #1f2937;
+}
+
+.jobs-rank-banner__name {
+  color: #5b21b6;
+}
+
+.jobs-rank-banner__clear {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid #c4b5fd;
+  background: #fff;
+  color: #5b21b6;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.jobs-rank-banner__clear:hover {
+  background: #5b21b6;
+  border-color: #5b21b6;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(91, 33, 182, 0.25);
+}
+
+.jobs-match-panel {
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.jobs-match-panel__title {
+  margin: 0;
+  padding: 16px 18px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.02em;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fafafa;
+}
+
+.jobs-match-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.jobs-match-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.jobs-match-filter:hover {
+  border-color: var(--match-accent, #c4b5fd);
+  background: color-mix(in srgb, var(--match-accent, #7b5ac8) 6%, white);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.jobs-match-filter--active {
+  border-width: 2px;
+  border-color: var(--match-accent, #7b5ac8);
+  background: color-mix(in srgb, var(--match-accent, #7b5ac8) 8%, white);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--match-accent, #7b5ac8) 18%, transparent);
+}
+
+.jobs-match-filter__body {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.jobs-match-filter__label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.jobs-match-filter--active .jobs-match-filter__label {
+  font-weight: 700;
+  color: var(--match-accent, #5b21b6);
+}
+
+.jobs-match-filter__range {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #9ca3af;
+}
+
+.jobs-match-filter__count {
+  flex-shrink: 0;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--match-accent, #7b5ac8);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.jobs-match-panel__hidden {
+  margin: 0;
+  padding: 0 16px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 1.4;
+}
 
 /* ── Navbar text links (center) ── */
 .navbar-link {

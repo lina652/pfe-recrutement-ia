@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import uuid
 
 from database import get_db
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from core.email_utils import normalize_email
 from models.user import User, UserRole
 from models.invitation import Invitation, InvitationStatus
@@ -14,14 +14,54 @@ from models.report import Report
 from core.dependencies import require_role
 from schemas.admin import (
     InviteRequest, InviteResponse,
+    SetPasswordRequest,
     UserListResponse, UserListItem,
     ChangeRoleRequest, ToggleUserResponse,
     LogListResponse, LogItem,
     GenerateReportRequest, ReportListResponse,
     ReportItem, DashboardStats
 )
+from models.company import Company
+from core.config import settings
+from services.mailer import send_staff_invitation_email
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["Administrator"])
+
+STAFF_ROLES = (
+    UserRole.RECRUITER,
+    UserRole.HIRING_MANAGER,
+    UserRole.ADMINISTRATOR,
+)
+
+
+def _apply_user_search(query, search: Optional[str]):
+    """Match name/email; strip whitespace and support multi-word queries."""
+    term = (search or "").strip()
+    if not term:
+        return query
+    tokens = [part for part in term.split() if part]
+    if not tokens:
+        return query
+    full_name = func.concat(
+        func.coalesce(User.first_name, ""),
+        " ",
+        func.coalesce(User.last_name, ""),
+    )
+    for token in tokens:
+        pattern = f"%{token}%"
+        query = query.filter(
+            or_(
+                User.email.ilike(pattern),
+                User.first_name.ilike(pattern),
+                User.last_name.ilike(pattern),
+                full_name.ilike(pattern),
+            )
+        )
+    return query
+
 
 def save_log(db, action, user_id=None, user_email=None,
              company_id=None, details=None, ip_address=None):
@@ -42,6 +82,10 @@ def get_dashboard_stats(
     current_user: User = Depends(require_role(UserRole.ADMINISTRATOR))
 ):
     cf = User.company_id == current_user.company_id
+    staff_cf = (cf, User.role.in_(STAFF_ROLES))
+    total_staff = db.query(User).filter(*staff_cf).count()
+    active_staff = db.query(User).filter(*staff_cf, User.is_active == True).count()
+    inactive_staff = total_staff - active_staff
     return DashboardStats(
         total_users=db.query(User).filter(cf).count(),
         total_candidates=db.query(User).filter(cf, User.role == UserRole.CANDIDATE).count(),
@@ -50,6 +94,9 @@ def get_dashboard_stats(
         total_admins=db.query(User).filter(cf, User.role == UserRole.ADMINISTRATOR).count(),
         active_users=db.query(User).filter(cf, User.is_active == True).count(),
         inactive_users=db.query(User).filter(cf, User.is_active == False).count(),
+        total_staff=total_staff,
+        active_staff=active_staff,
+        inactive_staff=inactive_staff,
         total_logs=db.query(Log).filter(Log.company_id == current_user.company_id).count(),
         total_reports=db.query(Report).filter(Report.company_id == current_user.company_id).count()
     )
@@ -118,27 +165,60 @@ def invite_staff(
         ip_address=request.client.host
     )
 
-    # Print token to console for testing (no real email yet)
-    print(f"")
-    print(f"📧 INVITATION TOKEN (dev mode)")
-    print(f"   Email: {norm_email}")
-    print(f"   Token: {token}")
-    print(f"   Set password at: POST /admin/set-password?token={token}&password=yourpassword")
-    print(f"")
+    company = db.query(Company).filter(
+        Company.company_id == current_user.company_id
+    ).first()
+    company_name = company.name if company else settings.APP_NAME
+    invite_link = f"{settings.FRONTEND_URL.rstrip('/')}/staff/activate?token={token}"
+    inviter_name = f"{current_user.first_name} {current_user.last_name}".strip() or current_user.email
+
+    email_sent = send_staff_invitation_email(
+        norm_email,
+        first_name=payload.first_name,
+        invite_link=invite_link,
+        role=payload.role.value,
+        company_name=company_name,
+        invited_by=inviter_name,
+        expires_days=3,
+    )
+
+    if not email_sent:
+        logger.warning(
+            "Staff invitation created for %s but email was not delivered (check SMTP / Mailtrap).",
+            norm_email,
+        )
+        print(f"\n📧 INVITATION (email not sent — SMTP issue or not configured)")
+        print(f"   Email: {norm_email}")
+        print(f"   Token: {token}")
+        print(f"   Activate: {invite_link}\n")
+
+    if email_sent:
+        message = f"Invitation email sent to {norm_email}"
+    elif settings.SMTP_HOST:
+        message = (
+            f"Invitation created for {norm_email}, but the email could not be delivered. "
+            "Check SMTP settings."
+        )
+    else:
+        message = (
+            f"Invitation created for {norm_email}. Configure SMTP in .env to send emails."
+        )
 
     return InviteResponse(
-        message=f"Invitation sent to {norm_email}",
+        message=message,
         email=norm_email,
         role=payload.role,
-        expires_at=expires_at
+        expires_at=expires_at,
+        email_sent=email_sent,
     )
 
 @router.post("/set-password")
 def set_password_from_invitation(
-    token: str,
-    password: str,
+    payload: SetPasswordRequest,
     db: Session = Depends(get_db)
 ):
+    token = payload.token
+    password = payload.password
     invitation = db.query(Invitation).filter(
         Invitation.token == token,
         Invitation.is_used == False
@@ -187,12 +267,7 @@ def list_users(
         query = query.filter(User.role == role)
     if is_active is not None:
         query = query.filter(User.is_active == is_active)
-    if search:
-        query = query.filter(
-            User.email.ilike(f"%{search}%") |
-            User.first_name.ilike(f"%{search}%") |
-            User.last_name.ilike(f"%{search}%")
-        )
+    query = _apply_user_search(query, search)
 
     users = query.order_by(User.created_at.desc()).all()
     return UserListResponse(

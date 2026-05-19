@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from database import get_db
-from sqlalchemy import func
+from sqlalchemy import func, extract, or_
 from core.email_utils import normalize_email
 from models.user import User, UserRole
 from models.company import Company
@@ -283,26 +283,49 @@ def get_platform_stats(
         "pending_companies": db.query(Company).filter(
             Company.is_active == False
         ).count(),
-        "total_users": db.query(User).count(),
-        "total_candidates": db.query(User).filter(
-            User.role == UserRole.CANDIDATE
-        ).count(),
-        "total_admins": db.query(User).filter(
-            User.role == UserRole.ADMINISTRATOR
-        ).count(),
-        "total_recruiters": db.query(User).filter(
-            User.role == UserRole.RECRUITER
-        ).count(),
     }
 
 @router.get("/companies")
 def list_companies(
+    search: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    day: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.SUPER_ADMIN))
 ):
-    companies = db.query(Company).order_by(
-        Company.created_at.desc()
-    ).all()
+    query = db.query(Company)
+
+    if is_active is not None:
+        query = query.filter(Company.is_active == is_active)
+
+    if year is not None:
+        query = query.filter(extract("year", Company.created_at) == year)
+
+    if month is not None:
+        if month < 1 or month > 12:
+            raise HTTPException(status_code=400, detail="Month must be between 1 and 12")
+        query = query.filter(extract("month", Company.created_at) == month)
+
+    if day is not None:
+        if day < 1 or day > 31:
+            raise HTTPException(status_code=400, detail="Day must be between 1 and 31")
+        query = query.filter(extract("day", Company.created_at) == day)
+
+    term = (search or "").strip()
+    if term:
+        pattern = f"%{term}%"
+        query = query.filter(
+            or_(
+                Company.name.ilike(pattern),
+                Company.slug.ilike(pattern),
+                Company.industry.ilike(pattern),
+                Company.website.ilike(pattern),
+            )
+        )
+
+    companies = query.order_by(Company.created_at.desc()).all()
     return {
         "total": len(companies),
         "companies": [

@@ -114,83 +114,23 @@ def send_decision_email_async(self, candidate_user_id: str, application_id: str,
     db = SessionLocal()
     try:
         from models.user import User
-        from services.mailer import send_email
-        from core.config import settings
+        from services.selection_notification_service import send_decision_email
 
         user = db.query(User).filter(User.user_id == candidate_user_id).first()
         if not user:
-            logger.warning(f"User not found for decision email task: {candidate_user_id}")
+            logger.warning("User not found for decision email task: %s", candidate_user_id)
             return {"status": "skipped"}
 
-        first_name = user.first_name
-
-        if decision == "ACCEPTED":
-            subject = f"🎉 Congratulations! You've Been Selected for {job_title} | TalentOs"
-            body = (
-                f"Hello {first_name},\n\n"
-                f"Congratulations! We are thrilled to inform you that you have been selected "
-                f"for the position of {job_title} at {company_name}!\n\n"
-                f"Our HR team will contact you shortly with next steps regarding your onboarding.\n\n"
-                f"We are excited to have you join our team!\n\n"
-                f"Best regards,\n{settings.APP_NAME}"
-            )
-
-            html_body = f"""<html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-            <div style="background:linear-gradient(135deg,#16a34a,#22c55e);padding:30px;border-radius:12px 12px 0 0;">
-                <h1 style="color:white;margin:0;font-family:cursive;">Talent<span style="color:#fef08a;">Os</span></h1>
-            </div>
-            <div style="padding:30px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
-                <p>Hello <strong>{first_name}</strong>,</p>
-                <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:2px solid #86efac;border-radius:12px;padding:20px;margin:20px 0;text-align:center;">
-                    <p style="font-size:24px;margin:0;color:#16a34a;">🎉 Congratulations!</p>
-                    <p style="font-size:18px;color:#166534;margin-top:10px;">You've Been Selected!</p>
-                </div>
-                <p>We are thrilled to inform you that you have been selected for the position of <strong>{job_title}</strong> at <strong>{company_name}</strong>!</p>
-                <p>Our HR team will contact you shortly with next steps regarding your onboarding.</p>
-                <p style="color:#16a34a;font-weight:bold;">We are excited to have you join our team!</p>
-                <hr style="border:none;border-top:1px solid #f3f4f6;margin:20px 0;"/>
-                <p style="color:#9ca3af;font-size:12px;">Best regards,<br/>{settings.APP_NAME}</p>
-            </div>
-            </body></html>"""
-
-        else:  # REJECTED
-            subject = f"Application Update for {job_title} | TalentOs"
-            body = (
-                f"Hello {first_name},\n\n"
-                f"Thank you for your interest in the {job_title} position at {company_name} "
-                f"and for taking the time to complete the interview process.\n\n"
-                f"After careful consideration, we have decided to move forward with another candidate "
-                f"whose qualifications more closely match our current needs.\n\n"
-                f"We genuinely appreciate your time and effort throughout this process. "
-                f"Your skills and experience are valuable, and we encourage you to apply for "
-                f"future opportunities that match your profile.\n\n"
-                f"We wish you all the best in your career journey.\n\n"
-                f"Best regards,\n{settings.APP_NAME}"
-            )
-
-            html_body = f"""<html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-            <div style="background:linear-gradient(135deg,#7B5AC8,#9683EC);padding:30px;border-radius:12px 12px 0 0;">
-                <h1 style="color:white;margin:0;font-family:cursive;">Talent<span style="color:#f97316;">Os</span></h1>
-            </div>
-            <div style="padding:30px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
-                <p>Hello <strong>{first_name}</strong>,</p>
-                <p>Thank you for your interest in the <strong>{job_title}</strong> position at <strong>{company_name}</strong> and for taking the time to complete the interview process.</p>
-                <p>After careful consideration, we have decided to move forward with another candidate whose qualifications more closely match our current needs.</p>
-                <div style="background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px;padding:15px;margin:20px 0;">
-                    <p style="margin:0;color:#5b21b6;">We genuinely appreciate your time and effort throughout this process. Your skills and experience are valuable, and we encourage you to apply for future opportunities that match your profile.</p>
-                </div>
-                <p>We wish you all the best in your career journey.</p>
-                <hr style="border:none;border-top:1px solid #f3f4f6;margin:20px 0;"/>
-                <p style="color:#9ca3af;font-size:12px;">Best regards,<br/>{settings.APP_NAME}</p>
-            </div>
-            </body></html>"""
-
-        send_email(user.email, subject, body, html=html_body)
-        logger.info(f"Decision email ({decision}) sent to {user.email} for application {application_id}")
-        return {"status": "sent", "email": user.email, "decision": decision}
+        sent = send_decision_email(
+            user,
+            decision if decision in ("ACCEPTED", "REJECTED") else "REJECTED",
+            job_title,
+            company_name,
+        )
+        return {"status": "sent" if sent else "skipped", "email": user.email, "decision": decision}
 
     except Exception as exc:
-        logger.error(f"Decision email sending failed: {exc}")
+        logger.error("Decision email sending failed: %s", exc)
         raise self.retry(exc=exc)
     finally:
         db.close()

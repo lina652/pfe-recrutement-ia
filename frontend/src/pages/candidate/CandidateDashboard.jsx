@@ -205,19 +205,8 @@ export default function CandidateDashboard() {
                         >
                           {STATUS_ICONS[app.status]} {app.status?.replace("_", " ")}
                         </span>
-                        {app.final_score > 0 && (
-                          <span className="rounded-lg border border-slate-200/80 bg-white/80 px-2 py-1 text-xs font-bold text-slate-700">
-                            Match {(app.final_score * 100).toFixed(0)}%
-                          </span>
-                        )}
                       </div>
                     </div>
-                    {app.ai_recommendation && (
-                      <div className="mb-4 rounded-2xl border border-blue-100/80 bg-blue-50/60 p-4 text-sm text-slate-800">
-                        <span className="mr-2 text-blue-500">💡</span>
-                        {app.ai_recommendation}
-                      </div>
-                    )}
                     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/60 pt-4 text-xs font-medium text-slate-500">
                       <span>
                         Applied{" "}
