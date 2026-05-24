@@ -1,11 +1,23 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import axios from "axios"
-import { login as loginApi, getMe } from "../../api/authApi"
+import { login as loginApi, getMe, API_BASE_URL } from "../../api/authApi"
 import { useAuth } from "../../context/AuthContext"
 import { useLanguage } from "../../context/LanguageContext"
 
 const STEPS = { FORM: "form", OTP: "otp" }
+
+const INITIAL_FORM = {
+  company_name: "",
+  company_website: "",
+  tax_id: "",
+  industry: "",
+  admin_first_name: "",
+  admin_last_name: "",
+  admin_email: "",
+  admin_password: "",
+  confirm_password: ""
+}
 
 const inputStyle = {
   width: "100%",
@@ -56,17 +68,15 @@ export default function CompanySignup() {
   const [otp, setOtp] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const [form, setForm] = useState({
-    company_name: "",
-    company_website: "",
-    tax_id: "",
-    industry: "",
-    admin_first_name: "",
-    admin_last_name: "",
-    admin_email: "",
-    admin_password: "",
-    confirm_password: ""
-  })
+  const [form, setForm] = useState(INITIAL_FORM)
+
+  useEffect(() => {
+    setForm(INITIAL_FORM)
+    setOtp("")
+    setAdminEmail("")
+    setAdminPassword("")
+    setCompanyId("")
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -81,7 +91,7 @@ export default function CompanySignup() {
     }
     setLoading(true)
     try {
-      const res = await axios.post("http://localhost:8000/superadmin/signup", {
+      const res = await axios.post(`${API_BASE_URL}/superadmin/signup`, {
         company_name: form.company_name,
         company_website: form.company_website,
         tax_id: form.tax_id || undefined,
@@ -107,7 +117,7 @@ export default function CompanySignup() {
     setLoading(true)
     setError("")
     try {
-      await axios.post("http://localhost:8000/superadmin/verify-otp", {
+      await axios.post(`${API_BASE_URL}/superadmin/verify-otp`, {
         email: adminEmail,
         otp_code: otp,
         company_id: companyId
@@ -126,7 +136,7 @@ export default function CompanySignup() {
   const handleResend = async () => {
     setError("")
     try {
-      await axios.post(`http://localhost:8000/superadmin/resend-otp?email=${adminEmail}&company_id=${companyId}`)
+      await axios.post(`${API_BASE_URL}/superadmin/resend-otp?email=${adminEmail}&company_id=${companyId}`)
       setError(t.newCodeSent)
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to resend")
@@ -169,7 +179,7 @@ export default function CompanySignup() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="new-password">
 
           {/* Company section */}
           <p style={{ fontSize:"11px", fontWeight:700, color:"#9ca3af", letterSpacing:"2px", textTransform:"uppercase", marginBottom:"12px" }}>
@@ -182,7 +192,7 @@ export default function CompanySignup() {
               type="text" required
               value={form.company_name}
               onChange={(e) => setForm({ ...form, company_name: e.target.value })}
-              placeholder="Tech Corp Tunisia"
+              placeholder="Enter the company name"
               style={inputStyle}
               onFocus={(e) => e.target.style.border = "2px solid #7c3aed"}
               onBlur={(e) => e.target.style.border = "2px solid #e5e7eb"}
@@ -195,7 +205,7 @@ export default function CompanySignup() {
               type="text" required
               value={form.company_website}
               onChange={(e) => setForm({ ...form, company_website: e.target.value })}
-              placeholder="https://techcorp.tn"
+              placeholder="https://www.example.com"
               style={inputStyle}
               onFocus={(e) => e.target.style.border = "2px solid #7c3aed"}
               onBlur={(e) => e.target.style.border = "2px solid #e5e7eb"}
@@ -212,7 +222,7 @@ export default function CompanySignup() {
                 type="text"
                 value={form.industry}
                 onChange={(e) => setForm({ ...form, industry: e.target.value })}
-                placeholder="Technology"
+                placeholder="e.g. Information Technology"
                 style={inputStyle}
                 onFocus={(e) => e.target.style.border = "2px solid #7c3aed"}
                 onBlur={(e) => e.target.style.border = "2px solid #e5e7eb"}
@@ -220,11 +230,17 @@ export default function CompanySignup() {
             </div>
             <div>
               <label style={{ fontSize:"13px", fontWeight:600, color:"#374151", display:"block", marginBottom:"6px" }}>{t.taxId}</label>
+              <input type="text" style={{ display:"none" }} autoComplete="on" />
               <input
+                name="company_tax_number"
                 type="text"
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
                 value={form.tax_id}
                 onChange={(e) => setForm({ ...form, tax_id: e.target.value })}
-                placeholder="123456789"
+                placeholder="Enter the business tax number"
                 style={inputStyle}
                 onFocus={(e) => e.target.style.border = "2px solid #7c3aed"}
                 onBlur={(e) => e.target.style.border = "2px solid #e5e7eb"}
@@ -246,6 +262,7 @@ export default function CompanySignup() {
                 type="text" required
                 value={form.admin_first_name}
                 onChange={(e) => setForm({ ...form, admin_first_name: e.target.value })}
+                placeholder="Enter the admin first name"
                 style={inputStyle}
                 onFocus={(e) => e.target.style.border = "2px solid #7c3aed"}
                 onBlur={(e) => e.target.style.border = "2px solid #e5e7eb"}
@@ -257,6 +274,7 @@ export default function CompanySignup() {
                 type="text" required
                 value={form.admin_last_name}
                 onChange={(e) => setForm({ ...form, admin_last_name: e.target.value })}
+                placeholder="Enter the admin last name"
                 style={inputStyle}
                 onFocus={(e) => e.target.style.border = "2px solid #7c3aed"}
                 onBlur={(e) => e.target.style.border = "2px solid #e5e7eb"}
@@ -264,21 +282,24 @@ export default function CompanySignup() {
             </div>
           </div>
 
-          <div style={{ marginBottom:"14px" }}>
-            <label style={{ fontSize:"13px", fontWeight:600, color:"#374151", display:"block", marginBottom:"6px" }}>{t.workEmail}</label>
-            <input
-              type="email" required
-              value={form.admin_email}
-              onChange={(e) => setForm({ ...form, admin_email: e.target.value })}
-              placeholder="you@techcorp.com"
-              style={inputStyle}
-              onFocus={(e) => e.target.style.border = "2px solid #7c3aed"}
-              onBlur={(e) => e.target.style.border = "2px solid #e5e7eb"}
-            />
-            <p style={{ fontSize:"11px", color:"#9ca3af", marginTop:"4px" }}>
-              {t.domainMatch}
-            </p>
-          </div>
+    <input
+  type="text"
+  inputMode="email"
+  required
+  readOnly
+  value={form.admin_email}
+  onChange={(e) => setForm({ ...form, admin_email: e.target.value })}
+  autoComplete="off"
+  placeholder="admin@company.com"
+  style={inputStyle}
+  onFocus={(e) => {
+    e.target.removeAttribute('readonly');
+    e.target.style.border = "2px solid #7c3aed";
+  }}
+  onBlur={(e) => {
+    e.target.style.border = "2px solid #e5e7eb";
+  }}
+/>
 
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px", marginBottom:"20px" }}>
             <div>
@@ -287,7 +308,7 @@ export default function CompanySignup() {
                 type="password" required
                 value={form.admin_password}
                 onChange={(e) => setForm({ ...form, admin_password: e.target.value })}
-                placeholder="Min 8 characters"
+                placeholder="At least 8 characters"
                 style={inputStyle}
                 onFocus={(e) => e.target.style.border = "2px solid #7c3aed"}
                 onBlur={(e) => e.target.style.border = "2px solid #e5e7eb"}
@@ -299,6 +320,7 @@ export default function CompanySignup() {
                 type="password" required
                 value={form.confirm_password}
                 onChange={(e) => setForm({ ...form, confirm_password: e.target.value })}
+                placeholder="Re-enter the password"
                 style={inputStyle}
                 onFocus={(e) => e.target.style.border = "2px solid #7c3aed"}
                 onBlur={(e) => e.target.style.border = "2px solid #e5e7eb"}
@@ -412,7 +434,7 @@ export default function CompanySignup() {
           maxLength={6}
           value={otp}
           onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-          placeholder="000000"
+          placeholder="Enter the 6-digit code"
           style={{
             width:"100%",
             border:"2px solid #e5e7eb",

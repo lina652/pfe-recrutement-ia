@@ -4,7 +4,6 @@ import API from "../../api/authApi"
 import {
   dashboardGlassClass,
   DashboardOverviewHero,
-  DetailLink,
   MiniDonut,
   pct,
 } from "../../components/shared/DashboardOverviewKit"
@@ -27,7 +26,7 @@ export default function RecruiterDashboard() {
       closed_jobs: stats?.closed_jobs ?? 0,
       total_applications: stats?.total_applications ?? 0,
       shortlisted: stats?.shortlisted_applications ?? 0,
-      pending: stats?.pending_applications ?? 0,
+      pending: stats?.pending_applications ?? 0 ,
       rejected: stats?.rejected_applications ?? 0,
       accepted: stats?.accepted_applications ?? 0,
     }),
@@ -55,7 +54,6 @@ export default function RecruiterDashboard() {
           <section className={glass}>
             <div className="mb-4 flex items-start justify-between gap-2">
               <h2 className="text-[15px] font-bold leading-snug text-green-900">Job activity</h2>
-              <DetailLink to="/recruiter/jobs" />
             </div>
             <div className="space-y-2.5">
               <div className="flex items-center justify-between gap-2 rounded-2xl bg-rose-50/90 px-3 py-2.5 ring-1 ring-rose-100/80">
@@ -72,7 +70,6 @@ export default function RecruiterDashboard() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="text-sm font-black text-amber-950">{s.active_jobs}</span>
-                  <DetailLink to="/recruiter/jobs" />
                 </div>
               </div>
               <div className="flex items-center justify-between gap-2 rounded-2xl bg-emerald-50/90 px-3 py-2.5 ring-1 ring-emerald-100/80">
@@ -82,7 +79,6 @@ export default function RecruiterDashboard() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="text-sm font-black text-emerald-950">{s.closed_jobs}</span>
-                  <DetailLink to="/recruiter/jobs" />
                 </div>
               </div>
             </div>
@@ -103,14 +99,13 @@ export default function RecruiterDashboard() {
               </div>
             </div>
             <div className="mt-4 flex justify-end">
-              <DetailLink to="/recruiter/jobs">Job offers</DetailLink>
+              {/* Job offers link intentionally removed */}
             </div>
           </section>
 
           <section className={glass}>
             <div className="mb-4 flex items-start justify-between gap-2">
               <h2 className="text-[15px] font-bold leading-snug text-green-900">Pipeline status</h2>
-              <DetailLink to="/recruiter/jobs" />
             </div>
             <div className="space-y-2.5">
               <div className="flex items-center justify-between gap-2 rounded-2xl bg-amber-50/90 px-3 py-2.5 ring-1 ring-amber-100/80">
@@ -127,7 +122,6 @@ export default function RecruiterDashboard() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="text-sm font-black text-violet-950">{s.shortlisted}</span>
-                  <DetailLink to="/recruiter/jobs" />
                 </div>
               </div>
               <div className="flex items-center justify-between gap-2 rounded-2xl bg-emerald-50/90 px-3 py-2.5 ring-1 ring-emerald-100/80">
@@ -137,7 +131,6 @@ export default function RecruiterDashboard() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="text-sm font-black text-emerald-950">{s.accepted}</span>
-                  <DetailLink to="/recruiter/jobs" />
                 </div>
               </div>
               <div className="flex items-center justify-between gap-2 rounded-2xl bg-rose-50/90 px-3 py-2.5 ring-1 ring-rose-100/80">

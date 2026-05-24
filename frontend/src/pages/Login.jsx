@@ -151,7 +151,7 @@ export default function Login() {
               required
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder="you@example.com"
+              placeholder="Enter your Email Address"
               style={{
                 width: "100%",
                 border: "2px solid #e5e7eb",
@@ -185,7 +185,7 @@ export default function Login() {
                 required
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder="••••••••"
+                placeholder="Enter your Password"
                 autoComplete="current-password"
                 style={{
                   width: "100%",

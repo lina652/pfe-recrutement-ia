@@ -1,7 +1,9 @@
 import axios from "axios"
 
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
+
 const API = axios.create({
-  baseURL: "http://localhost:8000"
+  baseURL: API_BASE_URL
 })
 
 API.interceptors.request.use((config) => {
@@ -18,7 +20,7 @@ API.interceptors.response.use(
       if (refresh) {
         try {
           const res = await axios.post(
-            "http://localhost:8000/auth/refresh",
+            `${API_BASE_URL}/auth/refresh`,
             { refresh_token: refresh }
           )
           localStorage.setItem("access_token", res.data.access_token)
@@ -46,7 +48,7 @@ export const updateProfile = (data) => API.put("/auth/profile", data)
 export const getStats = () => API.get("/admin/stats")
 export const inviteStaff = (data) => API.post("/admin/invite", data)
 export const setPasswordFromInvite = (data) =>
-  axios.post("http://localhost:8000/admin/set-password", data)
+  axios.post(`${API_BASE_URL}/admin/set-password`, data)
 export const getUsers = (params) => API.get("/admin/users", { params })
 export const toggleUser = (id) => API.put(`/admin/users/${id}/toggle`)
 export const changeRole = (id, role) => API.put(`/admin/users/${id}/role`, { role })
@@ -63,17 +65,17 @@ export const toggleCompany = (id) => API.put(`/superadmin/companies/${id}/toggle
 export const getRecruiterJobs = () => API.get("/recruiter/jobs")
 
 // Public — no auth needed
-export const getPublicJobs = (params) => axios.get("http://localhost:8000/public/jobs", { params })
-export const getPublicJobDetail = (id) => axios.get(`http://localhost:8000/public/jobs/${id}`)
-export const getSimilarJobs = (id) => axios.get(`http://localhost:8000/public/jobs/${id}/similar`)
-export const getPublicFilters = () => axios.get("http://localhost:8000/public/filters")
+export const getPublicJobs = (params) => axios.get(`${API_BASE_URL}/public/jobs`, { params })
+export const getPublicJobDetail = (id) => axios.get(`${API_BASE_URL}/public/jobs/${id}`)
+export const getSimilarJobs = (id) => axios.get(`${API_BASE_URL}/public/jobs/${id}/similar`)
+export const getPublicFilters = () => axios.get(`${API_BASE_URL}/public/filters`)
 export const matchJobsByCV = (formData, params) =>
-  axios.post("http://localhost:8000/public/jobs/match-cv", formData, { params })
+  axios.post(`${API_BASE_URL}/public/jobs/match-cv`, formData, { params })
 export const matchJobsByProfile = (params) => API.get("/public/jobs/match-profile", { params })
 
 // Candidate signup — no auth needed
-export const uploadCV = (formData) => axios.post("http://localhost:8000/candidate/signup/cv", formData)
-export const confirmSignup = (data) => axios.post("http://localhost:8000/candidate/signup/confirm", data)
+export const uploadCV = (formData) => axios.post(`${API_BASE_URL}/candidate/signup/cv`, formData)
+export const confirmSignup = (data) => axios.post(`${API_BASE_URL}/candidate/signup/confirm`, data)
 
 // Candidate — auth needed
 export const getCandidateProfile = () => API.get("/candidate/profile")
@@ -101,7 +103,7 @@ export function endInterviewOnPageLeave(interviewId) {
   if (!interviewId) return
   const token = localStorage.getItem("access_token")
   if (!token) return
-  const base = API.defaults.baseURL || "http://localhost:8000"
+  const base = API.defaults.baseURL || API_BASE_URL
   fetch(`${base}/interviews/candidate/${interviewId}/end`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
@@ -114,7 +116,7 @@ export const selectInterviewTimeSlot = (interviewId, data) => API.post(`/intervi
 export const updateInterviewLanguage = (interviewId, data) => API.patch(`/interviews/candidate/${interviewId}/language`, data)
 
 // Public interview scheduling (email link, no login)
-const PublicAPI = axios.create({ baseURL: "http://localhost:8000" })
+const PublicAPI = axios.create({ baseURL: API_BASE_URL })
 export const getPublicInterviewSchedule = (token) =>
   PublicAPI.get("/public/interview/schedule", { params: { token } })
 export const submitPublicInterviewSchedule = (token, data) =>

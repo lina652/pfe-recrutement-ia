@@ -5,7 +5,7 @@ from pathlib import Path
 class Settings(BaseSettings):
     # 1. Variables that MUST be in your .env
     DATABASE_URL: str
-    MONGO_URL: str
+    
     REDIS_URL: str
     SECRET_KEY: str
     GROQ_API_KEY: str  # Pydantic will look for GROQ_API_KEY in .env
