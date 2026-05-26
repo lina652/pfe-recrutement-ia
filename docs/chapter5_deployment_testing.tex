@@ -1,0 +1,387 @@
+% ==========================================
+% CHAPTER 5: DEPLOYMENT, TESTING AND FUTURE IMPROVEMENTS
+% Copy into your thesis .tex file.
+% ==========================================
+\chapter{Deployment, Testing and Future Improvements} \label{chap5}
+\minitoc
+\newpage
+
+\section*{Introduction}
+\addcontentsline{toc}{section}{Introduction}
+This chapter presents the final implementation phase of TalentOs. Sprint~5 focused on containerized deployment and system validation, ensuring that the platform could run reproducibly as an integrated stack and behave correctly under both nominal and degraded conditions. Testing was integrated throughout the development cycle: each sprint deliverable was validated on the running application before subsequent modules were added. Because the platform combines conventional web services with external AI APIs and multimodal interview processing, validation emphasized functional correctness, integration behavior, and qualitative review of AI outputs rather than automated line-coverage metrics alone.
+
+% -----------------------------------------------------------------------------
+\section{Sprint 5: Deployment and Testing}
+\label{sec:ch5:sprint5}
+% -----------------------------------------------------------------------------
+
+\subsection{Deployment}
+\label{sec:ch5:deployment}
+
+TalentOs was containerized using Docker Compose to provide a reproducible runtime environment for development, demonstration, and validation. The deployment stack consists of five services: PostgreSQL for relational persistence, Redis as the Celery broker and result backend, the FastAPI backend, a Celery worker for asynchronous recruitment workflows, and an Nginx-served React frontend.
+
+\subsubsection{Container Architecture}
+
+The backend image is built from Python~3.11 and includes system libraries required by OCR, OpenCV, DeepFace, and audio/video processing (\texttt{ffmpeg}, \texttt{libgl1}, \texttt{poppler-utils}, among others). The application starts with Uvicorn on port~8000 and exposes the full REST API together with interview media handling. The frontend image uses a multi-stage build: Node.js~20 compiles the React application with Vite, and Nginx~1.27 serves the generated static assets on port~80.
+
+Environment configuration is externalized through \texttt{.env} files and Docker environment variables. The frontend receives \texttt{VITE\_API\_URL} at build time so that the SPA communicates with the containerized backend instead of a hard-coded localhost endpoint. Interview media files are persisted through a dedicated Docker volume (\texttt{interview\_media}) so that uploaded audio and video remain available across container restarts.
+
+\subsubsection{Service Orchestration}
+
+Docker Compose defines explicit dependencies between services. PostgreSQL and Redis expose health checks; the backend and Celery worker start only after both dependencies report a healthy state. This prevents integration tests and manual validation from running against an incomplete stack.
+
+Table~\ref{tab:deployment_services} summarizes the deployed services.
+
+\begin{center}
+\captionof{table}{Docker Compose services}
+\label{tab:deployment_services}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{|l|l|X|}
+\hline
+\rowcolor{gray!20} \textbf{Service} & \textbf{Port} & \textbf{Role} \\
+\hline
+PostgreSQL & 5432 & Users, jobs, applications, interviews, reports \\
+\hline
+Redis & 6379 & Celery broker and result backend \\
+\hline
+Backend (FastAPI) & 8000 & REST API and AI orchestration \\
+\hline
+Celery worker & --- & Job closing, shortlisting, notifications \\
+\hline
+Frontend (Nginx) & 80 & React SPA \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsubsection{Deployment Validation}
+
+Deployment was considered successful when the following conditions were verified:
+\begin{itemize}
+    \item all Compose services start without error after \texttt{docker compose up --build};
+    \item the frontend loads and communicates with the backend through \texttt{VITE\_API\_URL};
+    \item authenticated users can log in and access role-specific dashboards;
+    \item Celery processes background tasks such as job closing and interview invitation workflows;
+    \item interview media and database records persist after container restart.
+\end{itemize}
+
+This containerized baseline provides the environment used for all testing activities described in the following subsection.
+
+\subsection{Testing}
+\label{sec:ch5:testing}
+
+\subsubsection{Testing Strategy}
+\label{sec:ch5:testing_strategy}
+
+The validation strategy for TalentOs follows a \textbf{real-system testing approach}: tests were executed against the actual backend services, frontend interfaces, PostgreSQL database, Redis/Celery workers, and live AI integrations (Groq LLM, Whisper STT, Sentence Transformers, PaddleOCR, DeepFace, ChromaDB). No mocked AI components were used during interview or matching validation, ensuring that observed behavior reflects the deployed prototype rather than simulated responses.
+
+Validation was organized at four complementary levels:
+\begin{enumerate}
+    \item \textbf{Environment verification:} confirm that Docker Compose services start correctly and communicate with each other.
+    \item \textbf{Module-level functional testing:} verify each sprint deliverable independently (authentication, CV extraction, matching, RAG, interview).
+    \item \textbf{Integration testing:} verify cross-module flows such as application submission triggering matching, job closing triggering orchestration, and interview completion updating final selection.
+    \item \textbf{AI behavior review:} manually inspect transcripts, extracted JSON, match scores, and interview reports for plausibility, robustness, and fairness under degraded conditions.
+\end{enumerate}
+
+Unlike projects that rely on large automated pytest suites, TalentOs validation was primarily \textbf{manual and scenario-driven}, which is appropriate for a prototype integrating multiple third-party AI models without a labeled benchmark dataset. The goal was not to maximize code coverage, but to validate \textbf{meaningful business rules and realistic failure modes}.
+
+\subsubsection{Test Environment and Data Preparation}
+\label{sec:ch5:test_environment}
+
+Tests were executed in two equivalent environments:
+\begin{itemize}
+    \item \textbf{Local development:} Uvicorn backend, Vite frontend, local PostgreSQL and Redis.
+    \item \textbf{Containerized deployment:} full Docker Compose stack with health-checked dependencies.
+\end{itemize}
+
+Initial test data were created using the seed script (\texttt{seed.py}), which initializes a Super Admin account and a demo company with an administrator. Additional users, requirement requests, job offers, CV uploads, applications, and interview sessions were then created manually to simulate realistic recruitment activity. For interview scheduling tests, \texttt{INTERVIEW\_TESTING\_MODE} was enabled to relax date restrictions and accelerate session execution during development.
+
+\begin{center}
+\captionof{table}{Test environment configuration}
+\label{tab:test_environment}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\rowcolor{gray!20} \textbf{Component} & \textbf{Role in testing} \\
+\hline
+PostgreSQL & Persistent validation of users, jobs, applications, interviews, reports \\
+\hline
+Redis + Celery & Background job closing, shortlisting, and notification workflows \\
+\hline
+FastAPI backend & REST API and AI service orchestration \\
+\hline
+React frontend & Role-based UI and interview room capture \\
+\hline
+Seed script & Known baseline accounts for authentication and RBAC tests \\
+\hline
+Prototype CV/job dataset & Manual sample documents and job postings for AI validation \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsubsection{Validation Levels by Platform Domain}
+\label{sec:ch5:validation_levels}
+
+System validation was mapped directly to the four main implementation domains described in Chapter~4. Table~\ref{tab:validation_domains} provides an overview of the manual validation scope.
+
+\begin{center}
+\captionof{table}{Validation domains and coverage areas}
+\label{tab:validation_domains}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{|l|X|c|}
+\hline
+\rowcolor{gray!20} \textbf{Domain} & \textbf{Coverage area} & \textbf{Scenarios} \\
+\hline
+Platform foundation &
+JWT login, RBAC, protected routes, multi-tenant company onboarding &
+8 \\
+\hline
+Document intelligence &
+CV upload, OCR fallback, LLM JSON extraction, signup confirmation &
+6 \\
+\hline
+Matching and RAG &
+Semantic scoring, recommendation labels, manager RAG conversations &
+7 \\
+\hline
+Interview and orchestration &
+Live interview, validity gates, report generation, LangGraph closing flow &
+18+ \\
+\hline
+\end{tabularx}
+\end{center}
+
+Each domain was considered successful when the expected UI behavior, API response, and persisted database state were observed without blocking errors.
+
+\subsubsection{Integration Test Scenarios}
+\label{sec:ch5:integration_tests}
+
+Integration testing validated interactions between backend modules and external services. Table~\ref{tab:integration_tests} summarizes the main cross-module scenarios.
+
+\begin{center}
+\captionof{table}{Integration test scenarios}
+\label{tab:integration_tests}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{|p{3.2cm}|X|X|c|}
+\hline
+\rowcolor{gray!20} \textbf{Scenario} & \textbf{Expected behavior} & \textbf{Observed behavior} & \textbf{Result} \\
+\hline
+Candidate CV signup &
+OCR + NER produce structured JSON; candidate confirms profile; account created &
+Extracted fields displayed for review; account persisted after confirmation &
+Pass \\
+\hline
+Job application &
+Application created; semantic match computed; score stored on application record &
+Match percentage and TOP/MEDIUM/LOW label returned and persisted &
+Pass \\
+\hline
+Manager RAG query &
+Retrieval restricted to manager-owned jobs; answer grounded in indexed artifacts &
+Relevant candidate/job context used in generated response &
+Pass \\
+\hline
+Job closing orchestration &
+Celery/LangGraph ranks applicants, shortlists candidates, sends interview invitations &
+Shortlisted candidates received interview records after closing &
+Pass \\
+\hline
+Interview completion &
+STT, scoring, and report generation update interview and final-selection views &
+Interview report available; composite ranking updated for manager &
+Pass \\
+\hline
+Unauthorized API access &
+Protected endpoints reject missing/invalid JWT or wrong role &
+401/403 responses returned for unauthorized calls &
+Pass \\
+\hline
+Service restart &
+Persisted applications, interviews, and reports remain available &
+Data retained after container restart &
+Pass \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsubsection{End-to-End Functional Testing}
+\label{sec:ch5:e2e_tests}
+
+End-to-end testing validated complete user journeys across roles. Four primary workflows were executed on the deployed prototype:
+
+\paragraph{Candidate journey.}
+The candidate browses public job offers, uploads a CV during signup or application, confirms extracted information, applies to a job, views match results, accepts an interview invitation, completes a live AI interview, and consults the generated report.
+
+\paragraph{Recruiter journey.}
+The recruiter reviews manager requirement requests, publishes job offers, monitors applications, and follows recruitment notifications.
+
+\paragraph{Hiring manager journey.}
+The hiring manager submits job requirements, uses the RAG assistant for job-specific candidate questions, and reviews shortlisted candidates in Final Selection with CV score, interview score, and composite ranking.
+
+\paragraph{Administrator journey.}
+The administrator manages users and invitations, activates staff accounts, and verifies role-restricted access across dashboards.
+
+Each journey was validated step by step against an expected outcome: successful authentication, correct role-based redirection, expected API payload, and consistent database persistence.
+
+\subsubsection{AI Interview Stress Testing}
+\label{sec:ch5:interview_stress_tests}
+
+Because the interview module is the most sensitive and multimodal part of the platform, a dedicated stress-test campaign was conducted beyond standard functional validation. Tests were grouped into four categories: robustness, functional behavior, fairness/bias, and adversarial security.
+
+\paragraph{Robustness tests.}
+
+\begin{center}
+\captionof{table}{Interview robustness tests}
+\label{tab:robustness_tests}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabularx}{\textwidth}{|c|l|c|}
+\hline
+\rowcolor{gray!20} \textbf{ID} & \textbf{Scenario} & \textbf{Status} \\
+\hline
+R1 & Camera off, microphone on & Done \\
+R2 & Microphone muted, camera on & Done \\
+R3 & Strong background noise & Done \\
+R4 & Very fast vs.\ very slow speech & Not performed \\
+R5 & Extreme lighting (backlight / dark room) & Done \\
+R6 & Multiple persons in frame & Not performed \\
+R7 & Partially hidden face & Done \\
+\hline
+\end{tabularx}
+\end{center}
+
+Key findings:
+\begin{itemize}
+    \item \textbf{R1:} emotion analysis correctly returned \texttt{no\_face\_detected} instead of inferring false emotions such as ``angry''.
+    \item \textbf{R2:} the silence gate activated independently of visible facial presence, confirming separate audio/video channels.
+    \item \textbf{R3:} transcription degraded under noise, but the anti-hallucination STT filter reduced prompt-echo and repetitive garbage output.
+    \item \textbf{R5:} \texttt{analyze\_lighting} detected dark or over-exposed conditions and surfaced quality recommendations.
+    \item \textbf{R7:} occluded faces reduced facial signal reliability; verbal scoring remained available.
+\end{itemize}
+
+\paragraph{Functional interview tests.}
+
+\begin{center}
+\captionof{table}{Interview functional tests}
+\label{tab:functional_interview_tests}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabularx}{\textwidth}{|c|l|c|}
+\hline
+\rowcolor{gray!20} \textbf{ID} & \textbf{Scenario} & \textbf{Status} \\
+\hline
+F1 & Language switch mid-interview & Done \\
+F2 & Very short vs.\ very long answers & Done \\
+F3 & Off-topic answer & Done \\
+F4 & Candidate asks the bot a question & Done \\
+F5 & Contrasting verbal and facial signals & Done \\
+\hline
+\end{tabularx}
+\end{center}
+
+Notable results:
+\begin{itemize}
+    \item \textbf{F1:} mid-interview code switching triggered language-compliance behavior rather than full dynamic language adaptation.
+    \item \textbf{F2:} short answers could trigger follow-up questions; long answers were bounded by the \textbf{120-second} frontend recording limit.
+    \item \textbf{F3/F4:} the bot reframed off-topic answers and returned to interviewer role after brief responses to candidate questions.
+    \item \textbf{F5:} the implemented \texttt{dissonance\_score} detected mismatch between text sentiment and facial emotion instead of averaging contradictory signals.
+\end{itemize}
+
+\paragraph{Fairness and bias tests.}
+
+\begin{center}
+\captionof{table}{Fairness and bias tests}
+\label{tab:bias_tests}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabularx}{\textwidth}{|c|l|c|}
+\hline
+\rowcolor{gray!20} \textbf{ID} & \textbf{Scenario} & \textbf{Status} \\
+\hline
+B1 & Non-native accents & Done \\
+B2 & Gender and emotion recognition & Done \\
+B3 & Skin tone under identical lighting & Done \\
+B4 & Cultural expressivity (expressive vs.\ reserved) & Not performed \\
+B5 & Candidate age & Done \\
+\hline
+\end{tabularx}
+\end{center}
+
+These tests confirmed that Whisper and DeepFace behave unevenly across speaker profiles, accents, gender, skin tone, and age. The results were documented as known model limitations, supporting the decision to keep AI interview scores advisory and human-controlled.
+
+\paragraph{Adversarial and security tests.}
+
+\begin{center}
+\captionof{table}{Adversarial and security tests}
+\label{tab:adversarial_tests}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabularx}{\textwidth}{|c|l|c|}
+\hline
+\rowcolor{gray!20} \textbf{ID} & \textbf{Scenario} & \textbf{Status} \\
+\hline
+A1 & Prompt injection in spoken answer & Done \\
+A2 & Reading a pre-written answer & Done \\
+A3 & Video filter / avatar-like face & Done \\
+A4 & Synthetic TTS playback into microphone & Not performed \\
+A5 & Off-camera coaching & Done \\
+\hline
+\end{tabularx}
+\end{center}
+
+The platform showed partial resistance to spoken prompt injection (\textbf{A1}) and revealed practical limits for detecting scripted answers, off-camera coaching, and synthetic media without specialized proctoring tools.
+
+\subsubsection{Testing Limitations}
+\label{sec:ch5:testing_limitations}
+
+The current validation scope has four main limitations:
+\begin{itemize}
+    \item no automated regression test suite (pytest/Jest) for backend or frontend modules;
+    \item no labeled benchmark dataset for precision/recall, Word Error Rate (WER), or ranking metrics;
+    \item four planned interview scenarios not executed within the project timeline (R4, R6, B4, A4);
+    \item AI interview evaluation validated qualitatively rather than against human interviewer scores.
+\end{itemize}
+
+These limitations are acceptable for a functional prototype demonstrating an end-to-end AI-assisted recruitment workflow, but they define the main directions for future testing improvements presented in Section~\ref{sec:ch5:future_improvements}.
+
+% -----------------------------------------------------------------------------
+\section{Future Improvements}
+\label{sec:ch5:future_improvements}
+% -----------------------------------------------------------------------------
+
+Although TalentOs already supports the full recruitment workflow from CV ingestion to final selection, several directions remain open for research and engineering. These improvements focus on evaluation rigor, scalability, fairness, and richer decision support rather than replacing the human-in-the-loop hiring model already implemented in the platform.
+
+\subsection{Dataset Construction and Model Calibration}
+
+The current system relies on pre-trained models and empirically chosen thresholds, such as the 45\% skill similarity gate, the 75\%/50\% TOP/MEDIUM/LOW classification boundaries, and the 40\% candidate-facing match suppression rule. A labeled recruitment dataset---containing annotated CV fields, job--candidate relevance judgments, and interview outcome labels---would allow systematic threshold tuning and quantitative benchmarking of OCR, NER, matching, and interview scoring modules.
+
+\subsection{Domain-Specific Information Extraction}
+
+CV parsing currently uses a general-purpose LLM after OCR recovery. During development, fine-tuned NER alternatives such as GLiNER and XLM-RoBERTa proved insufficient for heterogeneous CV layouts. A promising next step is to train or fine-tune a domain-specific extraction model on annotated CVs in multiple formats, reducing API cost and latency while preserving the current JSON schema consumed by downstream modules.
+
+\subsection{Multilingual Document and Speech Support}
+
+Interview sessions already support English and French, and digital French CVs are supported through native PDF text extraction. However, scanned documents rely on PaddleOCR configured with \texttt{lang='en'}, which may reduce recognition quality for accented French text. Future versions should extend OCR language configuration, improve multilingual skill normalization, and strengthen cross-language semantic matching.
+
+\subsection{Explainability and Fairness Controls}
+
+The platform produces scores, recommendations, and structured reports, but hiring managers still receive limited insight into why a specific category score changed or whether model behavior varies across demographic groups. Future improvements should add explainable matching outputs, interview score breakdowns with traceable signal contributions, fairness monitoring over time, and audit logs for AI-assisted decisions.
+
+\subsection{Stronger Interview Integrity Mechanisms}
+
+Current interview integrity checks rely on silence detection, spoken-language compliance, and spoken-name verification. Future work could integrate liveness detection, optional face-to-identity consistency checks, proctoring policies, and richer anomaly detection for scripted or assisted responses, while keeping such extensions configurable per organization.
+
+\subsection{Adaptive Ranking and Feedback Learning}
+
+Composite final selection currently uses fixed weights (35\% CV score and 65\% interview score). A future enhancement would allow hiring managers or administrators to configure category and composite weights per job family. Feedback captured when managers accept, reject, or override AI recommendations could also be used to refine ranking policies over time.
+
+\subsection{Retrieval and Decision-Support Enhancements}
+
+The RAG assistant is primarily exposed to hiring managers, although parts of the backend also authorize recruiter access. Future development should unify role-specific decision-support interfaces, persist vector indexes in a production-grade store, and add citation-rich answers linking each generated statement to candidate, job, or interview evidence.
+
+\subsection{Operational Scalability and Production Hardening}
+
+The Docker-based deployment provides a reproducible baseline, but a production rollout would require managed PostgreSQL and Redis services, horizontal scaling of Celery workers, centralized logging, health monitoring, automated backups, secrets management, CI/CD pipelines, and load testing for concurrent interview sessions. Interview media should also move from local volumes to durable object storage with retention policies.
+
+\subsection{Integration and Product Extensions}
+
+To increase adoption in real organizations, TalentOs could integrate with external HR systems and calendars (ATS export/import, LinkedIn job sync, Google Calendar or Outlook scheduling), provide richer administrator analytics dashboards, and deliver a mobile-friendly interview experience. Additional features such as candidate re-application tracking, talent pooling, and recruiter collaboration workflows would further transform the platform from a functional prototype into an enterprise-ready recruitment ecosystem.
+
+\section*{Conclusion}
+\addcontentsline{toc}{section}{Conclusion}
+This chapter presented the deployment and validation of TalentOs. Sprint~5 delivered a containerized Docker Compose stack and a structured validation campaign covering platform foundations, AI modules, integration flows, role-based end-to-end journeys, and dedicated interview stress tests. Although automated benchmark metrics were not available, the real-system testing approach confirmed that the platform operates coherently as an integrated AI-assisted recruitment system. The identified limitations and future improvements define a realistic roadmap for moving from prototype to production-ready deployment.

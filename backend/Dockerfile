@@ -25,6 +25,6 @@ COPY . .
 
 RUN mkdir -p interview_media
 
-EXPOSE 8000
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# The cloud platform will inject the PORT variable at runtime.
+# We wrap uvicorn in a shell execution so it can parse the environment variable.
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]

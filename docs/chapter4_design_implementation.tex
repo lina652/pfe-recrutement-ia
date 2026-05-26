@@ -1,0 +1,1327 @@
+% ==========================================
+% CHAPTER 4: DESIGN AND IMPLEMENTATION
+% Copy into your thesis .tex file.
+% Sprint 5 is documented in Chapter 5.
+% ==========================================
+\chapter{Design and Implementation} \label{chap4}
+\minitoc
+\newpage
+
+\section*{Introduction}
+\addcontentsline{toc}{section}{Introduction}
+This chapter details the technical realization of the platform, structured according to the Agile Scrum methodology. Although the development process consisted of five sprints in total, this chapter focuses on the four most significant implementation phases that shaped the system architecture and core functionalities, evolving from a foundational skeleton to a sophisticated AI-driven ecosystem. Sprint~5 is presented separately in Chapter~5. Each section documents the architectural decisions, technical objectives, and logic flows that underpin the system's core modules.
+% -----------------------------------------------------------------------------
+\section{Dataset and Data Sources}
+\label{sec:ch4:dataset}
+% -----------------------------------------------------------------------------
+
+TalentOs does not rely on a single public benchmark dataset for model training. The platform uses \textbf{pre-trained AI models} combined with \textbf{application-generated recruitment data} collected during development and functional testing.
+
+\subsection{Data Used by the Platform}
+
+\begin{center}
+\captionof{table}{Main data categories used in TalentOs}
+\label{tab:dataset_categories}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\rowcolor{gray!20} \textbf{Data Type} & \textbf{Usage} \\
+\hline
+CV documents & OCR, NER extraction, semantic matching \\
+\hline
+Job offers and requirements & Matching criteria and RAG context \\
+\hline
+Applications & Score persistence, shortlisting, workflow orchestration \\
+\hline
+Interview media and transcripts & STT, emotion analysis, report generation \\
+\hline
+RAG document chunks & Retrieval-augmented decision support \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsection{Pre-trained Models}
+
+The AI modules use existing models rather than a project-specific training corpus:
+\begin{itemize}
+    \item \textbf{Sentence Transformers} (\texttt{all-MiniLM-L6-v2}) for semantic embeddings
+    \item \textbf{Groq LLM} (\texttt{Llama~3.3}) for CV parsing, interviews, and RAG generation
+    \item \textbf{Groq Whisper} for speech-to-text
+    \item \textbf{PaddleOCR} for scanned CV text recovery
+    \item \textbf{DeepFace} and sentiment models for interview signal analysis
+\end{itemize}
+
+\subsection{Validation Data}
+
+Validation was performed on a \textbf{small prototype dataset} created during implementation:
+\begin{itemize}
+    \item demo company and user accounts initialized through the seed script
+    \item manually created job offers and requirement requests
+    \item sample CV uploads and candidate applications
+    \item end-to-end workflow tests from apply to final selection
+\end{itemize}
+
+This dataset is sufficient to demonstrate system behavior, but it is not large enough for large-scale supervised benchmarking. Evaluation therefore focuses on functional correctness, qualitative review, and human inspection of AI outputs, as detailed in Section~\ref{sec:ch4:evaluation}.
+% =====================================================================
+% Sprint 1
+% =====================================================================
+\section{Sprint 1: Core Architecture and Foundation} \label{chap4:sec1}
+
+\subsection{Sprint 1 Overview}
+Sprint 1 established the platform's technical baseline, delivering a decoupled client-server architecture (React SPA and FastAPI) backed by PostgreSQL. The primary focus was creating a secure ``skeleton'' through JWT-based authentication and Role-Based Access Control (RBAC). This foundational layer ensures a stable environment for the integration of complex AI services in subsequent iterations.
+
+\subsection{Sprint 1 Objectives}
+The primary objectives for this initial phase were:
+\begin{itemize}[leftmargin=*]
+    \item \textbf{Architectural Stabilization:} Establish a layered REST API structure separating routes, schemas, and business logic.
+    \item \textbf{Identity and Access Management:} Implement secure authentication and role-based permissions for Candidate, Recruiter, Manager, Admin, and Super Admin.
+    \item \textbf{Data Persistence:} Initialize the relational schema for core entities including Users, Jobs, Applications, and CV metadata.
+    \item \textbf{Functional MVP Shell:} Develop role-specific layouts and navigation to demonstrate end-to-end user journeys.
+    \item \textbf{Operational Readiness:} Centralize configuration via environment variables for reproducible deployment.
+\end{itemize}
+
+\subsection{Sprint 1 Backlog}
+
+\begin{spacing}{1.2}
+\begin{center}
+\captionof{table}{Sprint 1 backlog focused on core architecture and foundation}
+\label{tab:sprint1_backlog}
+\begin{tabularx}{\textwidth}{|l|X|c|c|}
+\hline
+\rowcolor{gray!20} \textbf{ID} & \textbf{User Story} & \textbf{Role} & \textbf{Priority} \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 1: Platform Governance \& Multi-tenancy}} \\ \hline
+1 & As a Super Admin, I want to verify company registrations and manage tenants so that only authorized organizations use the platform. & SuperAdmin & High \\ \hline
+2 & As a company representative, I want to register a new organization and create its first administrator account so that the company can start using the platform. & Public & High \\ \hline
+3 & As an Admin, I want to manage user accounts and roles so that access is controlled across the platform. & Admin & High \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 2: Identity \& Access Management}} \\ \hline
+1 & As a user, I want to log in securely so that I can access my account. & All users & High \\ \hline
+2 & As a user, I want role-based access so that I only see pages and actions allowed for my role. & All users & High \\ \hline
+3 & As a user, I want to log out safely so that my session is protected. & All users & High \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 3: Core Recruitment Data Model}} \\ \hline
+1 & As a Manager, I want to submit job requirements so that the recruiter can review and post jobs. & Manager & High \\ \hline
+2 & As a Recruiter, I want to create and manage job offers so that I can publish open positions. & Recruiter & High \\ \hline
+3 & As a Candidate, I want to browse job offers so that I can find suitable positions. & Candidate & High \\ \hline
+4 & As a Candidate, I want to submit applications so that I can apply for jobs. & Candidate & High \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 4: Frontend Foundation}} \\ \hline
+1 & As a user, I want a role-based dashboard so that I can access the right workspace. & All users & High \\ \hline
+2 & As a Candidate, I want a clear navigation menu so that I can easily use the platform. & Candidate & Medium \\ \hline
+3 & As a Recruiter, I want a dashboard for job and application management so that I can work efficiently. & Recruiter & Medium \\ \hline
+
+\end{tabularx}
+\end{center}
+\end{spacing}
+
+\subsection{Frontend Implementation}
+
+The frontend of the application was developed using React and React Router DOM. It provides a role-based single-page interface where each authenticated user is redirected to the correct dashboard after login. The application uses protected routes to restrict access according to the user role stored in the authentication context.
+
+\subsubsection{Application Routing}
+
+The main routes implemented in the frontend are summarized in Table~\ref{tab:frontend_routes}.
+
+\begin{center}
+\captionof{table}{Frontend routes and their purposes}
+\label{tab:frontend_routes}
+\renewcommand{\arraystretch}{0.8}
+\begin{tabularx}{\textwidth}{|l|l|}
+\hline
+\rowcolor{gray!20} \textbf{Route} & \textbf{Purpose} \\
+\hline
+\texttt{/} & Landing page \\
+\hline
+\texttt{/company/signup} & Public company registration page \\
+\hline
+\texttt{/login} & Login page \\
+\hline
+\texttt{/jobs} & Public job listing page \\
+\hline
+\texttt{/jobs/:id} & Job details page \\
+\hline
+\texttt{/jobs/:id/apply} & Job application page \\
+\hline
+\texttt{/superadmin/dashboard} & Super Admin dashboard \\
+\hline
+\texttt{/admin/dashboard} & Administrator dashboard \\
+\hline
+\texttt{/recruiter/dashboard} & Recruiter dashboard \\
+\hline
+\texttt{/manager/dashboard} & Hiring manager dashboard \\
+\hline
+\texttt{/candidate/dashboard} & Candidate dashboard \\
+\hline
+\texttt{/candidate/applications} & Candidate applications page \\
+\hline
+\texttt{/manager/jobs} & Job requirements page \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsubsection{Protected Routes}
+
+Access to sensitive pages is controlled through a protected route component. After successful authentication, the JWT tokens and user profile are stored in the authentication context. The protected route checks whether the user is authenticated and whether the user role matches the allowed roles for the target page. If the token is missing or invalid, the user is redirected to the login page. If the role is not authorized, the user is redirected to the unauthorized page.
+
+\subsubsection{Public and Onboarding Interfaces}
+
+Several interfaces are accessible before authentication or outside role-specific dashboards, as summarized in Table~\ref{tab:public_interfaces}.
+
+\begin{center}
+\captionof{table}{Public and onboarding frontend interfaces}
+\label{tab:public_interfaces}
+\renewcommand{\arraystretch}{0.8}
+\begin{tabularx}{\textwidth}{|p{4cm}|X|}
+\hline
+\rowcolor{gray!20} \textbf{Interface} & \textbf{Purpose} \\
+\hline
+Landing page & Presents the platform and entry points for candidates and companies \\
+\hline
+Browse jobs page & Allows visitors and candidates to search and view published job offers \\
+\hline
+Create company page & Allows a new organization to register, verify by OTP, and create its first administrator account \\
+\hline
+Login page & Allows the user to sign in using email and password \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsubsection{Role-Specific Interfaces}
+
+The frontend provides a dedicated workspace for each authenticated role, as summarized in Table~\ref{tab:role_interfaces}.
+
+\begin{center}
+\captionof{table}{Role-specific frontend interfaces}
+\label{tab:role_interfaces}
+\renewcommand{\arraystretch}{0.8}
+\begin{tabularx}{\textwidth}{|p{4cm}|X|}
+\hline
+\rowcolor{gray!20} \textbf{Interface} & \textbf{Purpose} \\
+\hline
+Super Admin dashboard & Allows the platform operator to manage companies and global tenants \\
+\hline
+Administrator dashboard & Allows administrators to manage users, invitations, logs, and reports \\
+\hline
+Recruiter dashboard & Allows recruiters to manage job offers and recruitment-related requests \\
+\hline
+Candidate dashboard & Allows candidates to follow applications and interviews \\
+\hline
+Hiring manager dashboard & Allows hiring managers to submit job requirements and review selection-related information \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsection{Backend Infrastructure}
+
+The backend was implemented with FastAPI. The server initialization loads the database engine, creates the ORM metadata, synchronizes the database schema when needed, configures CORS, mounts static media files, and registers all API routers.
+
+\subsubsection{Application Initialization}
+
+The backend startup sequence is illustrated in Figure~\ref{fig:backend_startup}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{backend_startup.pdf}
+    \caption{Backend startup sequence of the TalentOs platform}
+    \label{fig:backend_startup}
+\end{figure}
+
+\subsubsection{Middleware}
+
+The backend uses CORS middleware to allow the React frontend to communicate with the API. It also includes an exception handler for database unavailability so that errors are returned as proper HTTP responses.
+
+\subsubsection{API Organization}
+
+The API is organized by domain into separate routers, as shown in Table~\ref{tab:api_routers}.
+
+\begin{center}
+\captionof{table}{API routers and their domains}
+\label{tab:api_routers}
+\renewcommand{\arraystretch}{0.8}
+\begin{tabularx}{\textwidth}{|l|l|}
+\hline
+\rowcolor{gray!20} \textbf{Router} & \textbf{Responsibility} \\
+\hline
+\texttt{auth} & Authentication and profile management \\
+\hline
+\texttt{admin} & Administrator operations \\
+\hline
+\texttt{recruiter} & Recruiter operations \\
+\hline
+\texttt{manager} & Hiring manager operations \\
+\hline
+\texttt{candidate} & Candidate operations \\
+\hline
+\texttt{public} & Public pages and public actions \\
+\hline
+\texttt{interview} & Interview sessions and reporting \\
+\hline
+\texttt{rag} & RAG-assisted decision support \\
+\hline
+\texttt{orchestrator} & Pipeline orchestration services \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsubsection{Request Flow}
+
+A request first enters the FastAPI application, passes through middleware, reaches the corresponding router, and then invokes the service and database layers. The response is returned as JSON to the frontend.
+
+\subsection{Authentication and Role-Based Access Control}
+
+Authentication is implemented using bcrypt for password hashing and JSON Web Tokens for session management. When a user logs in, the backend verifies the password with bcrypt, then generates an access token and a refresh token. The access token contains the user identifier and role, and it is used to access protected endpoints.
+
+\subsubsection{Password Hashing}
+
+Passwords are never stored in plain text. The system hashes passwords with bcrypt before saving them in the database and verifies them during login.
+
+\subsubsection{JWT Generation}
+
+After successful login, the backend creates an access token for protected requests and a refresh token for renewing the session. The access token encodes the user identifier, role, and expiration timestamp, making each request self-describing for authorization purposes.
+
+\subsubsection{Token Validation}
+
+Protected API endpoints require a valid JWT in the authorization header. The authentication middleware validates the token, retrieves the current user, and rejects unauthorized access if the token is missing, expired, or invalid.
+
+\subsubsection{Role Matrix}
+
+Role-based access control is handled by a middleware function that checks whether the current user role belongs to the list of allowed roles for the route. The full permission matrix is shown in Table~\ref{tab:role_matrix}.
+
+\begin{center}
+\captionof{table}{Role-based access control matrix}
+\label{tab:role_matrix}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{|X|c|c|c|c|c|}
+\hline
+\rowcolor{gray!20} \textbf{Functionality} & \textbf{Super Admin} & \textbf{Admin} & \textbf{Recruiter} & \textbf{Hiring Manager} & \textbf{Candidate} \\
+\hline
+Manage users & \checkmark & \checkmark & $\times$ & $\times$ & $\times$ \\
+\hline
+Create jobs & $\times$ & $\times$ & \checkmark & $\times$ & $\times$ \\
+\hline
+Submit job requirements & $\times$ & $\times$ & $\times$ & \checkmark & $\times$ \\
+\hline
+Apply to jobs & $\times$ & $\times$ & $\times$ & $\times$ & \checkmark$^\dagger$ \\
+\hline
+Participate in AI interviews & $\times$ & $\times$ & $\times$ & $\times$ & \checkmark \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsection{Database Layer}
+
+The database layer is built on SQLAlchemy with a relational PostgreSQL schema. The main entities used by the application are shown in Table~\ref{tab:entities}.
+
+\begin{center}
+\captionof{table}{Main database entities}
+\label{tab:entities}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\rowcolor{gray!20} \textbf{Entity} & \textbf{Purpose} \\
+\hline
+User & Stores account information, role, activation state, and profile data \\
+\hline
+Company & Stores company profile information such as name, industry, website, and logo \\
+\hline
+JobOffer & Stores job postings created by recruiters \\
+\hline
+RequirementRequest & Stores job requirement requests submitted by hiring managers \\
+\hline
+Application & Stores candidate submissions and application status \\
+\hline
+Interview & Stores interview scheduling, candidate response, and session state \\
+\hline
+Notification & Stores notifications sent to users \\
+\hline
+CVVersion & Stores uploaded CV versions for candidates \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsection{Application Interfaces}
+
+The application provides several interfaces adapted to each role.
+
+\begin{itemize}
+    \item \textbf{Login page:} authentication interface for all users.
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/login.pdf}
+        \caption{Login Page}
+        \label{fig:login_page}
+    \end{figure}
+
+    \item \textbf{Company creation page:} public onboarding interface used by a new organization to register, verify by OTP, and create its first administrator account.
+    \begin{figure}[H]
+        \centering
+        \singlespacing
+        \includegraphics[width=0.8\linewidth]{images/companysignup1.pdf}
+        \vspace{0.5cm}
+        \includegraphics[width=0.8\linewidth]{images/companysignup2.pdf}
+        \caption{Create Company Account}
+        \label{fig:create_company_account}
+    \end{figure}
+
+    \item \textbf{Recruiter dashboard:} interface for managing job offers and recruitment requests.
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=\linewidth]{images/recruiter.pdf}
+        \caption{Recruiter Dashboard}
+        \label{fig:recruiter_dashboard}
+    \end{figure}
+
+    \item \textbf{Job creation page:} interface used to create and publish new job offers.
+    \item \textbf{Candidate portal:} interface used to browse jobs, apply to jobs, and track applications.
+    \item \textbf{Hiring manager dashboard:} interface used to submit requirements and follow job selection workflows.
+\end{itemize}
+
+\subsection{Sprint 1 Sequence Diagrams}
+
+\subsubsection{Login Sequence}
+
+Figure~\ref{fig:login_sequence} illustrates the authentication flow implemented during Sprint~1. After the user submits valid credentials, the backend verifies the password with bcrypt, issues JWT tokens, loads the user profile, and the frontend redirects the user to the appropriate role-specific dashboard.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{login_sequence.pdf}
+    \caption{User login and role-based redirection sequence}
+    \label{fig:login_sequence}
+\end{figure}
+
+\subsubsection{Request Flow}
+
+Figure~\ref{fig:protected_request_sequence} shows how protected pages and API endpoints are handled at runtime. On the frontend, the \texttt{ProtectedRoute} component verifies authentication and role authorization before rendering a dashboard. On the backend, each protected request passes through JWT validation and role-based access control before reaching the service and database layers.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{protected_request_sequence.pdf}
+    \caption{Protected API request flow with role-based access control}
+    \label{fig:protected_request_sequence}
+\end{figure}
+
+\subsection{Sprint 1 Outcomes}
+
+The first sprint focused on delivering the core foundations of the platform. The sprint outcomes are summarized in Table~\ref{tab:sprint1_outcomes}.
+
+\begin{center}
+\captionof{table}{Sprint 1 outcomes}
+\label{tab:sprint1_outcomes}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|l|c|}
+\hline
+\rowcolor{gray!20} \textbf{Deliverable} & \textbf{Status} \\
+\hline
+Authentication system & Completed \\
+\hline
+Database structure & Completed \\
+\hline
+Role management & Completed \\
+\hline
+Initial interfaces & Completed \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Conclusion}
+At the end of Sprint 1, the project established the main technical foundation of the platform, including authentication, role-based access control, routing, and database entities. These elements now provide a stable base for implementing the recruitment workflows, interview automation, and AI-assisted decision support in the next sprints.
+
+% =====================================================================
+% Sprint 2
+% =====================================================================
+\section{Sprint 2: OCR and NER Development} \label{chap4:sec2}
+
+\subsection{Sprint 2 Overview}
+
+Sprint 2 introduced the document intelligence layer of the platform. Building on the foundation delivered in Sprint 1, this sprint focused on transforming raw candidate CVs into structured, machine-readable profiles through a two-stage pipeline combining optical character recognition and large language model-based entity extraction. The pipeline supports both digital and scanned documents and produces a normalized JSON output that is reused by all downstream recruitment modules.
+
+\subsection{Sprint 2 Objectives}
+\label{sec:sprint2:objectives}
+
+The main objectives were:
+\begin{itemize}
+    \item to allow a candidate to upload a CV and automatically extract its content
+    \item to support both native PDF text extraction and OCR fallback for scanned or image-based CVs
+    \item to reject unreadable documents when the extracted text is too short to be reliable
+    \item to parse CV content into a normalized JSON structure using an LLM-based extraction step
+    \item to extract the candidate's name, contact information, skills, education, work experience, certifications, languages, and projects
+    \item to create a confirmation step so the candidate can validate the extracted information before account creation
+    \item to make the extraction pipeline deterministic, robust, and reusable by later modules
+    \item to keep the output strict enough to be consumed directly by the backend without manual cleanup
+\end{itemize}
+
+\subsection{Sprint 2 Backlog}
+\label{sec:sprint2:backlog}
+
+\begin{spacing}{1.2}
+\begin{center}
+\captionof{table}{Sprint 2 backlog focused on OCR and NER development}
+\label{tab:sprint2_backlog}
+\begin{tabularx}{\textwidth}{|l|X|c|c|}
+\hline
+\rowcolor{gray!20} \textbf{ID} & \textbf{User Story} & \textbf{Role} & \textbf{Priority} \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 1: CV Upload \& Document Intake}} \\ \hline
+1 & As a Candidate, I want to upload my CV so that the system can extract my profile automatically. & Candidate & High \\ \hline
+2 & As a Candidate, I want the system to accept PDF documents so that I can submit my resume in a common format. & Candidate & High \\ \hline
+3 & As a Candidate, I want the system to reject unsupported file types so that invalid documents are not processed. & Candidate & High \\ \hline
+4 & As a Candidate, I want the system to process scanned CVs so that image-based documents are still usable. & Candidate & High \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 2: OCR Text Recovery}} \\ \hline
+1 & As a Candidate, I want the system to extract text from digital PDFs directly so that processing is fast and accurate. & Candidate & High \\ \hline
+2 & As a Candidate, I want OCR fallback on scanned pages so that low-text documents can still be parsed. & Candidate & High \\ \hline
+3 & As a Candidate, I want the system to preserve as much readable text as possible so that my profile is extracted correctly. & Candidate & High \\ \hline
+4 & As a Candidate, I want unreadable documents to be detected so that I can submit a better file if needed. & Candidate & Medium \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 3: NER-Based Structured Extraction}} \\ \hline
+1 & As a Candidate, I want my CV to be converted into structured JSON so that the platform can read my information automatically. & Candidate & High \\ \hline
+2 & As a Candidate, I want my name and contact details to be extracted so that I do not have to type them again. & Candidate & High \\ \hline
+3 & As a Candidate, I want my skills and languages to be extracted so that my profile is complete. & Candidate & High \\ \hline
+4 & As a Candidate, I want my education and work experience to be extracted so that my CV is represented faithfully. & Candidate & High \\ \hline
+5 & As a Candidate, I want certifications and projects to be extracted so that my profile includes all relevant details. & Candidate & Medium \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 4: Confirmation \& Account Creation}} \\ \hline
+1 & As a Candidate, I want to review the extracted information so that I can correct mistakes before creating my account. & Candidate & High \\ \hline
+2 & As a Candidate, I want to confirm the extracted data and set a password so that my account can be created. & Candidate & High \\ \hline
+3 & As a Candidate, I want to know if an email already exists so that I can avoid duplicate accounts. & Candidate & High \\ \hline
+4 & As a Candidate, I want to receive a clear success message after confirmation so that I know my account was created. & Candidate & Medium \\ \hline
+
+\end{tabularx}
+\end{center}
+\end{spacing}
+
+\subsection{OCR \& NER Pipeline Architecture}
+\label{sec:sprint2:ocr_ner_architecture}
+
+The Sprint 2 pipeline is organized into two consecutive stages: text recovery and structured extraction. The system first tries to recover raw text from the CV, then sends that text to a parsing model that converts it into a structured candidate profile.
+
+\subsubsection{Stage 1: OCR and Text Recovery}
+
+The OCR service uses PyMuPDF to open the document page by page. For each page, it first tries native text extraction. If the extracted page text contains more than \textbf{50 characters}, the page is considered readable and its native text is kept. If the extracted page text is shorter than or equal to \textbf{50 characters}, the page is treated as scanned or image-based, rendered at \textbf{300 DPI}, and passed to PaddleOCR. PaddleOCR is initialized with \texttt{use\_angle\_cls=True} and \texttt{lang='en'}, and recognized text lines are concatenated to rebuild the page content. This strategy ensures that the system favors faster native extraction whenever possible, while still supporting scanned CVs and image-based documents.
+
+\subsubsection{Stage 2: NER-Style Structured Extraction}
+
+Once the full CV text is recovered, it is sent to a Groq-hosted LLM that behaves as an information extraction engine. The model is instructed to output only valid JSON. The extraction model used is \texttt{llama-3.3-70b-versatile}, with a response temperature set to \textbf{0} to reduce randomness. The backend requests a JSON object response, not free-form text, and the returned JSON is parsed directly and reused by the application.
+
+\subsubsection{Minimum Text Threshold}
+
+To avoid unstable parsing on empty or near-empty documents, the pipeline requires the recovered CV text to contain at least \textbf{30 characters} before sending it to the NER step. If the text is below this threshold, the document is rejected with a validation error.
+
+\subsubsection{Pipeline Reuse}
+
+The same OCR and NER pipeline is reused across multiple application flows, as shown in Table~\ref{tab:pipeline_reuse}.
+
+\begin{center}
+\captionof{table}{Contexts where the OCR and NER pipeline is reused}
+\label{tab:pipeline_reuse}
+\renewcommand{\arraystretch}{0.8}
+\begin{tabularx}{\textwidth}{|l|}
+\hline
+\rowcolor{gray!20} \textbf{Usage Context} \\
+\hline
+CV upload during candidate signup \\
+\hline
+Background CV processing tasks \\
+\hline
+CV-based candidate profile creation \\
+\hline
+Document recovery steps used by downstream recruitment modules \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsubsection{Fallback Strategy}
+
+When a CV cannot be read reliably, the system does not attempt to invent missing information. The upload is rejected if the extracted text is too short, or the candidate can continue with the manually extracted data if enough information is available.
+
+\subsection{NER Prompt Design \& Output Structure}
+\label{sec:sprint2:ner_prompt}
+
+The NER prompt is built to force the model into a structured extraction role. It is not a conversational prompt; it is a constrained parser prompt.
+
+\subsubsection{Prompt Design Principles}
+
+The model acts as an HR data parser. The response must be a single valid JSON object with no explanation, markdown, or commentary. The output schema is fixed so the backend can consume it directly, and deterministic decoding is used to reduce formatting drift.
+
+\subsubsection{CV Extraction Schema}
+
+The CV parsing prompt extracts the fields shown in Table~\ref{tab:cv_schema}.
+
+\begin{center}
+\captionof{table}{CV extraction schema fields}
+\label{tab:cv_schema}
+\renewcommand{\arraystretch}{0.8}
+\begin{tabularx}{\textwidth}{|l|l|}
+\hline
+\rowcolor{gray!20} \textbf{Field} & \textbf{Content} \\
+\hline
+\texttt{name} & Candidate full name \\
+\hline
+\texttt{contact} & Email, phone, location, LinkedIn, GitHub \\
+\hline
+\texttt{skills} & Technical and soft skills \\
+\hline
+\texttt{languages} & Language name and proficiency level \\
+\hline
+\texttt{education} & School, degree, field, graduation year \\
+\hline
+\texttt{work\_experience} & Company, role, duration, description \\
+\hline
+\texttt{certifications} & List of certifications \\
+\hline
+\texttt{projects} & Project name and description \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsubsection{Output Handling}
+
+The parsed JSON is immediately used by the backend to populate the extracted candidate name, email, phone, and skills; to allow the candidate to confirm the extracted profile before account creation; to store a clean structured representation of the CV data; and to prevent the backend from relying on free-text CV content.
+
+\subsubsection{Representative Prompt Template}
+
+\begin{verbatim}
+You are an expert HR Data Parser. Extract CV information into JSON:
+{
+    "name": "",
+    "contact": {"email": "", "phone": "", "location": "",
+                "linkedin": "", "github": ""},
+    "skills": {"technical": [], "soft": []},
+    "languages": [{"language": "", "level": ""}],
+    "education": [{"school": "", "degree": "", "field": "", "year": ""}],
+    "work_experience": [{"company": "", "role": "",
+                         "duration": "", "description": ""}],
+    "certifications": [],
+    "projects": [{"name": "", "description": ""}]
+}
+Return ONLY valid JSON, no markdown.
+\end{verbatim}
+
+\subsection{Sequence Diagram}
+\label{sec:sprint2:sequence_diagram}
+
+The sequence diagram below describes the Sprint 2 document flow from CV upload to account creation.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{images/NLP Model Processing-2026-05-23-123144.pdf}
+    \caption{Sequence Diagram of Document Processing and Account Creation}
+    \label{fig:sprint2_document_flow}
+\end{figure}
+
+\subsection{Application Interfaces}
+\label{sec:sprint2:application_interfaces}
+
+Sprint 2 exposed the OCR and NER pipeline through a small set of candidate-facing interfaces and REST endpoints.
+
+\begin{center}
+\captionof{table}{Application interfaces exposed by Sprint 2}
+\label{tab:sprint2_interfaces}
+\begin{tabularx}{\textwidth}{|p{4cm}|p{2.3cm}|X|p{3.8cm}|}
+\hline
+\rowcolor{gray!20}
+\textbf{Interface} & \textbf{Layer} & \textbf{Purpose} & \textbf{Main Data Exchanged} \\ \hline
+
+Candidate CV signup page & Frontend & Allows a candidate to upload a CV and review the extracted profile before account creation. & Uploaded file, extracted name, email, phone, and skills. \\ \hline
+
+Candidate confirmation page & Frontend & Lets the candidate confirm the extracted information and create an account. & Confirmed profile data and password. \\ \hline
+
+\texttt{POST /candidate/signup/cv} & REST API & Uploads a CV and returns the extracted data for confirmation. & Multipart file upload; structured CV JSON response. \\ \hline
+
+\texttt{POST /candidate/signup/confirm} & REST API & Creates the candidate account and candidate profile from the extracted CV data. & Name, email, phone, skills, password.\\ \hline
+
+\end{tabularx}
+\end{center}
+
+\subsection{Sprint 2 Outcomes}
+\label{sec:sprint2:outcomes}
+
+The second sprint focused on establishing the document intelligence layer of the platform. The sprint outcomes are summarized in Table~\ref{tab:sprint2_outcomes}.
+
+\begin{center}
+\captionof{table}{Sprint 2 outcomes}
+\label{tab:sprint2_outcomes}
+\renewcommand{\arraystretch}{0.8}
+\begin{tabular}{|l|l|}
+\hline
+\rowcolor{gray!20} \textbf{Deliverable} & \textbf{Status} \\
+\hline
+CV upload and automatic text extraction & Completed \\
+\hline
+Native PDF text extraction & Completed \\
+\hline
+PaddleOCR fallback for scanned documents & Completed \\
+\hline
+Text validation (minimum 30 characters) & Completed \\
+\hline
+Structured NER JSON extraction & Completed \\
+\hline
+Multi-field data extraction (name, contact, skills, education, etc.) & Completed \\
+\hline
+Data review interface before account creation & Completed \\
+\hline
+Deterministic pipeline for module reuse & Completed \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Conclusion}
+In summary, Sprint 2 established the OCR and NER foundation of the platform. It converted raw candidate documents into structured profile data and created the document intelligence layer required for later stages.
+
+% =====================================================================
+% Sprint 3
+% =====================================================================
+\section{Sprint 3: Semantic Matching and RAG} \label{chap4:sec3}
+
+\subsection{Sprint 3 Overview}
+
+Sprint 3 focused on the intelligence layer responsible for semantic understanding and retrieval-augmented decision support. After the CV ingestion and orchestration foundations were established in earlier sprints, this sprint made the platform capable of comparing candidate profiles against job requirements and of supporting hiring managers with contextualized AI assistance.
+
+\subsection{Sprint 3 Objectives}
+\label{sec:sprint3:objectives}
+
+The main objectives were:
+\begin{itemize}
+    \item to compute semantic similarity between candidate profiles and job requirements using dense embeddings rather than keyword-only matching
+    \item to classify applications according to match quality and produce a reusable recommendation signal for downstream decision views
+    \item to persist canonical matching results on the application record so the same score can be reused across the platform
+    \item to enable a hiring-manager-facing RAG assistant that can answer questions about candidates, jobs, applications, and interviews using private company data
+    \item to build a secure retrieval layer where access is restricted by role and job ownership
+    \item to index recruitment artifacts into a vector store for contextual question answering
+    \item to expose semantic matching capabilities through frontend pages and REST endpoints
+    \item to keep the final hiring decision human-controlled even when AI produces ranked recommendations
+    \item to support candidate-facing job discovery and hiring-manager-facing decision support in distinct interfaces
+\end{itemize}
+
+\subsection{Sprint 3 Backlog}
+\label{sec:sprint3:backlog}
+
+The sprint backlog was selected from the semantic matching, candidate ranking, and hiring-manager RAG assistant modules.
+
+\begin{spacing}{1.2}
+\begin{center}
+\captionof{table}{Sprint 3 backlog focused on semantic matching and RAG}
+\label{tab:sprint3_backlog}
+\begin{tabularx}{\textwidth}{|l|X|c|c|}
+\hline
+\rowcolor{gray!20} \textbf{ID} & \textbf{User Story} & \textbf{Role} & \textbf{Priority} \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 1: Semantic Matching}} \\ \hline
+1 & As a Candidate, I want my profile to be compared against job requirements using semantic embeddings so that related skills are recognized beyond exact keywords. & Candidate & High \\ \hline
+2 & As a Candidate, I want the system to compute a weighted match score across skills, education, experience, languages, soft skills, certifications, and profile fit so that my overall fit is fairly represented. & Candidate & High \\ \hline
+3 & As a Candidate, I want my application to be classified as TOP, MEDIUM, or LOW so that I understand how well I match a job. & Candidate & Medium \\ \hline
+4 & As a Candidate, I want matches below 40\% to be hidden so that I only see relevant job recommendations. & Candidate & Medium \\ \hline
+5 & As a System, I want match results persisted on the application record so that the same canonical score is reused across all dashboards. & System & High \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 2: Final Selection Support}} \\ \hline
+6 & As a Hiring Manager, I want shortlisted candidates ranked by semantic and interview evidence so that I can compare applicants for final selection. & Hiring Manager & High \\ \hline
+7 & As a Hiring Manager, I want to see CV score, interview score, and composite ranking so that I understand why a candidate appears in the shortlist. & Hiring Manager & Medium \\ \hline
+8 & As a Hiring Manager, I want the final hiring decision to remain human-controlled so that AI rankings stay advisory rather than automatic. & Hiring Manager & High \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 3: Hiring-Manager RAG Assistant}} \\ \hline
+9 & As a Hiring Manager, I want to ask questions about candidates, jobs, applications, and interviews so that I get contextual answers grounded in company data. & Hiring Manager & High \\ \hline
+10 & As a Hiring Manager, I want to access only the jobs I submitted so that retrieval is restricted by ownership. & Hiring Manager & High \\ \hline
+11 & As a Hiring Manager, I want my conversations saved with title, job association, and history so that I can review them later. & Hiring Manager & Medium \\ \hline
+12 & As a System, I want recruitment artifacts indexed into a vector store so that question answering is grounded and hallucinations are reduced. & System & High \\ \hline
+
+\end{tabularx}
+\end{center}
+\end{spacing}
+
+Although Final Selection support appears in the Sprint~3 backlog, the composite ranking interface was prepared in Sprint~3 while full integration of interview evidence was completed in Sprint~4.
+
+\subsection{Semantic Matching Architecture}
+\label{sec:sprint3:semantic_matching_architecture}
+
+The semantic matching module compares a candidate's structured profile with the requirements of a job offer using dense vector representations and category-based scoring. This architecture captures semantic proximity between related skills, titles, and experience descriptions.
+
+
+
+\subsubsection{Core Implementation}
+
+The matching service loads a SentenceTransformer model and encodes both candidate data and job requirements into vector space. The adopted model is \textit{all-MiniLM-L6-v2}, which produces \textbf{384-dimensional embedding vectors}. Cosine similarity is then computed between these vectors to derive category-level scores for skills, certifications, and profile fit.
+
+\subsubsection{Scoring Logic}
+
+Each category is assigned a weight as shown in Table~\ref{tab:scoring_weights}. The overall score is computed as a weighted average across all active categories, normalized to the $0$--$1$ range and presented as a percentage.
+
+\begin{center}
+\captionof{table}{Semantic matching category weights}
+\label{tab:scoring_weights}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{|l|X|c|}
+\hline
+\rowcolor{gray!20} \textbf{Category} & \textbf{Description} & \textbf{Weight (\%)} \\
+\hline
+Skills & Technical skills required for the job & 20\% \\
+\hline
+Education Level & Minimum required degree (e.g., Bachelor, Master) & 15\% \\
+\hline
+Experience & Minimum years of professional experience & 15\% \\
+\hline
+Languages & Required spoken/written languages & 10\% \\
+\hline
+Soft Skills & Interpersonal and behavioral competencies & 15\% \\
+\hline
+Certifications & Required professional certifications & 10\% \\
+\hline
+Profile Fit & Global semantic similarity between CV and job text & 15\% \\
+\hline
+\end{tabularx}
+\end{center}
+
+Classification thresholds are applied to the final score as follows: a score above or equal to 75\% is classified as \textbf{TOP}; a score between 50\% and 74\% is classified as \textbf{MEDIUM}; and a score below 50\% is classified as \textbf{LOW}. Matches below 40\% are suppressed from candidate-facing job recommendations entirely.
+
+\subsubsection{Skill Matching Strategy}
+
+For Skills and Certifications, job requirements and CV items are encoded into vectors and compared. A requirement is considered matched when the best cosine similarity exceeds a threshold of 45\% (i.e., similarity $>$ 0.45). These thresholds are empirical defaults that should be validated and may be adjusted based on labeled data and reviewer feedback.
+
+\subsubsection{Education Matching Strategy}
+
+Education is matched using a normalized degree hierarchy so higher degrees satisfy lower-level requirements (e.g., a master's can satisfy a bachelor's requirement).
+
+\subsubsection{Experience Matching Strategy}
+
+Experience is estimated from duration expressions and capped at 1.0 when the minimum requirement is met. The extracted years are converted into a normalized score per requirement.
+
+\subsubsection{Profile Fit Strategy}
+
+Profile Fit computes a global textual compatibility signal between the CV profile and the job text, complementing structured field matches.
+
+\subsubsection{Persistence And Reuse}
+
+Match results are persisted on the application record so all dashboards and views reuse the same canonical score.
+
+\subsubsection{Composite Ranking for Final Selection}
+
+For hiring-manager final selection, CV matching and interview evaluation are fused into a single composite score on the $0$--$100$ scale:
+\[
+\text{Composite} = 0.35 \times (\text{CV score}) + 0.65 \times (\text{Interview score})
+\]
+The CV score is normalized from the semantic matching result ($0$--$1$), and the interview score is the overall interview evaluation ($0$--$100$). Candidates are ranked in descending composite-score order in the Final Selection view.
+
+\subsection{RAG Architecture}
+\label{sec:sprint3:rag_architecture}
+
+The RAG subsystem provides grounded conversational access to recruitment data for authorized users. It combines retrieval over job- and company-specific recruitment documents with LLM-based response generation.
+
+\subsubsection{Main Building Blocks}
+
+The RAG subsystem is composed of five core components, as described in Table~\ref{tab:rag_components}.
+
+\begin{center}
+\captionof{table}{RAG subsystem building blocks}
+\label{tab:rag_components}
+\renewcommand{\arraystretch}{0.8}
+\begin{tabularx}{\textwidth}{|p{3.5cm}|l|}
+\hline
+\rowcolor{gray!20} \textbf{Component} & \textbf{Role} \\
+\hline
+Text Splitting & Documents are chunked into retrievable segments \\
+\hline
+Embeddings & Chosen embedding model produces dense vectors for each chunk \\
+\hline
+Vector Store & Chroma stores document chunks for similarity search \\
+\hline
+Generation Model & An LLM generates answers using retrieved context \\
+\hline
+Document Builder & Candidate, job, application, and interview artifacts form the retrieval context \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsubsection{Retrieval Scope}
+
+The RAG layer is role-aware and limited by ownership. In the current frontend, the assistant is exposed to \textbf{Hiring Managers} through \texttt{/manager/ai}. Managers can access only jobs they submitted (\texttt{created\_by = current\_user.id}). The backend also authorizes recruiter role access at API level, but the primary decision-support interface is manager-facing.
+
+\subsubsection{Conversation Model}
+
+Conversations persist metadata including title, job association, author, favorites, and timestamps, together with message history for later review.
+
+\subsubsection{Grounding Strategy}
+
+On each query, the service refreshes or queries the job-specific vector store, retrieves context, and generates an answer grounded in company documents to reduce hallucinations.
+
+\subsection{Sequence Diagram}
+\label{sec:sprint3:sequence_diagram}
+
+The following simplified sequence diagram focuses on matching, job visibility, and ranking flows.
+
+\begin{figure}[H]
+    \makebox[\textwidth][l]{%
+    \hspace{-3cm}
+    \includegraphics[width=1.3\textwidth]{images/NLP Model Processing-2026-05-23-142648.pdf}
+    }
+    \caption{Sequence Diagram of Semantic Matching and RAG Flow}
+    \label{fig:sprint3_sequence}
+\end{figure}
+
+\subsection{Application Interfaces}
+\label{sec:sprint3:application_interfaces}
+
+Sprint 3 exposed the matching capabilities through frontend pages and REST endpoints.
+
+\begin{center}
+\captionof{table}{Application interfaces exposed by Sprint 3}
+\label{tab:sprint3_interfaces}
+\begin{tabularx}{\textwidth}{|p{4cm}|p{2.3cm}|X|p{3.9cm}|}
+\hline
+\rowcolor{gray!20}
+\textbf{Interface} & \textbf{Layer} & \textbf{Purpose} & \textbf{Main Data Exchanged} \\
+\hline
+Browse Jobs Page & Frontend & Lets candidates discover jobs and, when authenticated, view semantic match percentages. & Job list, filters, match percentage, recommendation label. \\
+\hline
+Candidate Job Application Flow & Frontend & Lets the candidate apply to a job and immediately see the AI match result. & Application data, semantic score, recommendation. \\
+\hline
+Candidate Applications Page & Frontend & Displays the candidate's submitted applications and statuses. & Application IDs, job titles, status, dates, match signal. \\
+\hline
+Hiring Manager Final Selection Page & Frontend & Shows shortlisted candidates with CV score, interview score, and composite ranking. & Job ID, ranked candidate list, scores, recommendations. \\
+\hline
+RAG Conversation Management (Manager) & Frontend & Allows managers to create and view RAG conversations for their jobs. & Conversation title, job association, messages. \\
+\hline
+\texttt{POST /candidate/apply/\{job\_id\}} & REST API & Creates an application and triggers semantic matching. & Application record, match percentage, AI recommendation. \\
+\hline
+\texttt{GET /candidate/applications} & REST API & Returns all applications for the authenticated candidate. & Application list with job title, status, and dates. \\
+\hline
+\texttt{GET /public/jobs/match-profile} & REST API & Returns ranked jobs for an authenticated candidate profile. & Ranked job list with match percentages. \\
+\hline
+\texttt{GET /manager/final-selection/\{job\_id\}} & REST API & Returns shortlisted candidates and ranking evidence for final selection. & Ranked candidate list with CV, interview, and composite scores. \\
+\hline
+\texttt{GET /rag/conversations} & REST API & Returns saved RAG conversations for the authenticated manager or recruiter. & Conversation metadata and message history. \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsection{Sprint 3 Outcomes}
+\label{sec:sprint3:outcomes}
+
+At the end of Sprint 3, the platform delivered the intelligence layer that supports semantic recruitment analysis and private AI assistance. The outcomes are summarized in Table~\ref{tab:sprint3_outcomes}.
+
+\begin{center}
+\captionof{table}{Sprint 3 outcomes}
+\label{tab:sprint3_outcomes}
+\renewcommand{\arraystretch}{0.8}
+
+\begin{tabular}{|l|c|}
+\hline
+\rowcolor{gray!20} \textbf{Deliverable} & \textbf{Status} \\
+\hline
+Embedding Pipelines For Candidates And Jobs & Completed \\
+\hline
+Weighted Category Scoring And Normalization & Completed \\
+\hline
+Vector DB (Chroma) Indexing And Retrieval & Completed \\
+\hline
+Matching API Endpoints And UI Integration & Completed \\
+\hline
+Manager-Only Job Access Enforcement & Completed \\
+\hline
+Match Suppression Below 40\% & Completed \\
+\hline
+RAG Assistant (Hiring-Manager-Facing) & Completed \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Conclusion}
+Sprint 3 established the matching layer: it computes normalized, explainable match scores, exposes ranked candidate evidence to hiring managers during final selection, and provides a hiring-manager RAG assistant as an auxiliary tool separate from deterministic matching.
+
+% =====================================================================
+% Sprint 4
+% =====================================================================
+\section{Sprint 4: AI Bot and Integration} \label{chap4:sec4}
+
+\subsection{Sprint 4 Overview}
+
+Sprint 4 focused on the interview intelligence layer of the platform. After the candidate ingestion, semantic matching, RAG assistant, and orchestration foundations were implemented in earlier sprints, this sprint aimed to deliver a complete AI interview experience with real-time multimodal signal processing, controlled conversational flow, report generation, and hiring-manager visibility during final selection.
+
+\subsection{Sprint 4 Objectives}
+\label{sec:sprint4:objectives}
+
+The main objectives were:
+\begin{itemize}
+    \item to provide a complete candidate interview room where the interview can be started, monitored, and ended from the frontend
+    \item to support bilingual interviews in English and French
+    \item to transcribe candidate speech using a speech-to-text service and generate the bot's responses with a large language model
+    \item to analyze multi-signal interview evidence, including audio, video, text, sentiment, emotions, identity checks, and language compliance
+    \item to prevent abuse through silence detection, language mismatch detection, and identity mismatch gates
+    \item to persist interview messages, interview phases, and session state for continuity and auditing
+    \item to generate a structured AI evaluation report after the interview is completed, even when the session ends early
+    \item to expose candidate interfaces for interview scheduling, interview participation, and report review
+    \item to keep the final evaluation human-readable and operationally useful for hiring managers during final selection
+    \item to ensure the interview workflow integrates cleanly with the previously built closing, scheduling, and ranking pipeline
+\end{itemize}
+
+\subsection{Sprint 4 Backlog}
+\label{sec:sprint4:backlog}
+
+The sprint backlog was centered on the interview lifecycle, from invitation acceptance to report generation and final selection support.
+
+\begin{spacing}{1.2}
+\begin{center}
+\captionof{table}{Sprint 4 backlog focused on AI interview execution and evaluation}
+\label{tab:sprint4_backlog}
+\begin{tabularx}{\textwidth}{|l|X|c|c|}
+\hline
+\rowcolor{gray!20} \textbf{ID} & \textbf{User Story} & \textbf{Role} & \textbf{Priority} \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 1: Interview Scheduling And Setup}} \\ \hline
+1 & As a Candidate, I want to see interview invitations and their status so that I can accept or reschedule them. & Candidate & High \\ \hline
+2 & As a Candidate, I want to select the interview language (English or French) so that I can complete the session comfortably. & Candidate & High \\ \hline
+3 & As a Candidate, I want to choose an interview time slot so that I can schedule the session at a convenient time. & Candidate & High \\ \hline
+4 & As a System, I want to automatically invite shortlisted candidates after job closing so that the assessment phase can begin. & System & High \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 2: Live Interview Execution}} \\ \hline
+5 & As a Candidate, I want to enter a video interview room so that I can answer live AI-generated questions. & Candidate & High \\ \hline
+6 & As a Candidate, I want my audio and video to be captured during the interview so that my responses can be analyzed. & Candidate & High \\ \hline
+7 & As an AI Agent, I want to transcribe the candidate's spoken answers using STT so that I can analyze their responses in text form. & AI Agent & High \\ \hline
+8 & As an AI Agent, I want to analyze emotional signals from the candidate's video and audio so that I can assess communication quality. & AI Agent & High \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 3: Interview Logic And Phases}} \\ \hline
+9 & As an AI Agent, I want to enforce interview gates (silence detection, identity mismatch, language mismatch) so that the interview remains valid and secure. & AI Agent & High \\ \hline
+10 & As an AI Agent, I want to manage interview phases (introduction, technical, behavioral, closing) so that the interview follows a structured progression. & AI Agent & High \\ \hline
+11 & As an AI Agent, I want to generate contextual follow-up questions based on candidate answers so that the interview remains adaptive and personalized. & AI Agent & High \\ \hline
+12 & As a Candidate, I want to see the current interview phase and progress so that I understand where we are in the conversation. & Candidate & Medium \\ \hline
+
+\multicolumn{4}{|l|}{\cellcolor{gray!10}\textbf{Module 4: Scoring And Report Generation}} \\ \hline
+13 & As an AI Agent, I want to compute scores across communication, technical, behavioral, and motivation dimensions so that the interview produces a multi-signal evaluation. & AI Agent & High \\ \hline
+14 & As an AI Agent, I want to generate a structured interview report with scores, evidence, and recommendation so that hiring managers can review the evaluation. & AI Agent & High \\ \hline
+15 & As a Hiring Manager, I want to inspect interview evidence in the final selection view so that I can understand candidate strengths and weaknesses. & Hiring Manager & High \\ \hline
+16 & As a Hiring Manager, I want interview evidence to be available in downstream decision views so that final hiring decisions remain informed by interview data. & Hiring Manager & High \\ \hline
+
+\end{tabularx}
+\end{center}
+\end{spacing}
+
+\subsection{Interview System Architecture}
+\label{sec:sprint4:interview_architecture}
+
+The interview subsystem is organized as a multi-layer architecture that coordinates frontend interaction, API orchestration, media handling, speech processing, LLM generation, and evaluation persistence. The key architectural principle is that the interview process is stateful but recoverable: the backend keeps the session state in the database, which allows the system to resume, audit, and evaluate the interview consistently even when the session is completed early or interrupted.
+
+\subsubsection{Architectural Layers}
+
+\begin{center}
+\captionof{table}{Interview system architectural layers and responsibilities}
+\label{tab:interview_layers}
+\renewcommand{\arraystretch}{0.8}
+
+\begin{tabularx}{\textwidth}{|p{3cm}|X|}
+\hline
+\rowcolor{gray!20} \textbf{Layer} & \textbf{Responsibilities} \\
+\hline
+Frontend & Candidate interview room, invitation management, scheduling, hiring-manager final selection views \\
+\hline
+API & Interview lifecycle endpoints: start, turn processing, end, score retrieval, scheduling, language update \\
+\hline
+Service & STT, TTS, emotion analysis, sentiment analysis, identity detection, language mismatch, phase progression, report generation \\
+\hline
+Persistence & Interview status, current phase, turn count, session state, candidate responses, message history, scheduled time, final report \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsubsection{Interview Phase Progression}
+
+Interviews follow a structured flow with context-aware LLM prompts, as described in Table~\ref{tab:interview_phases}.
+
+\begin{center}
+\captionof{table}{Interview phase progression}
+\label{tab:interview_phases}
+\renewcommand{\arraystretch}{0.8}
+
+\begin{tabularx}{\textwidth}{|p{3cm}|p{3cm}|X|}
+\hline
+\rowcolor{gray!20} \textbf{Phase} & \textbf{Duration} & \textbf{Content} \\
+\hline
+Introduction & 2--3 min & Icebreaker, role explanation, candidate expectations \\
+\hline
+Technical & 8--12 min & Problem-solving, domain knowledge, scenario-based questions \\
+\hline
+Behavioral & 8--12 min & Teamwork, conflict handling, motivation \\
+\hline
+Closing & 2--3 min & Candidate questions, next steps, session wrap-up \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsubsection{Interview Gates}
+
+The system enforces validity checks to prevent fraud or data corruption, as described in Table~\ref{tab:interview_gates}.
+
+\begin{center}
+\captionof{table}{Interview validity gates}
+\label{tab:interview_gates}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{|p{3.5cm}|X|}
+\hline
+\rowcolor{gray!20} \textbf{Gate} & \textbf{Behavior} \\
+\hline
+Silence Detection &
+If the transcript is empty, shorter than 3 characters, or the STT service returns a warning, the turn is treated as silence. The bot warns the candidate after each consecutive silent turn and closes the interview after 4 consecutive silent turns. \\
+\hline
+Language Mismatch &
+If the detected spoken language differs from the selected interview language (EN/FR) with sufficient confidence ($\geq 0.55$), the candidate is warned. Repeated mismatches trigger stronger warnings, and a score penalty is applied in the final report. \\
+\hline
+Identity Warning &
+On the first interview turn, if the spoken name does not match the registered candidate name, the bot asks the candidate to reconfirm their full name. \\
+\hline
+Identity Fraud Closure &
+If the candidate confirms a different name again, the interview is terminated for integrity reasons and the incident is recorded. \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsubsection{Session Quality Monitoring}
+
+In addition to hard validity gates, the platform monitors session conditions such as lighting, face visibility, and audio quality, as described in Table~\ref{tab:interview_quality}.
+
+\begin{center}
+\captionof{table}{Interview session quality monitoring}
+\label{tab:interview_quality}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{|p{3.5cm}|X|}
+\hline
+\rowcolor{gray!20} \textbf{Check} & \textbf{Behavior} \\
+\hline
+Lighting Quality &
+Video frames are analyzed for brightness, contrast, saturation, uneven lighting, and overexposure. If lighting is too dark, too bright, uneven, or low-contrast, the issue is recorded in the session quality report. \\
+\hline
+Face Detectability &
+The system checks whether the candidate's face is visible in the video stream. Poor or intermittent face detection is recorded and may trigger a technical recommendation. \\
+\hline
+Audio Quality &
+The candidate's audio is analyzed for volume, noise, and clipping. Poor audio quality is recorded and may trigger a recommendation to adjust the microphone or environment. \\
+\hline
+Global Quality Score &
+Lighting, face detectability, and audio quality are combined into a global quality score. If the score falls below 50, the bot provides a short technical tip before continuing the interview. \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsection{Multi-Signal Scoring Architecture}
+\label{sec:sprint4:multi_signal_scoring}
+
+Sprint 4 introduced a multi-signal scoring design that goes beyond the transcript text. The interview engine combines several signals to assess the quality and validity of the session.
+
+\subsubsection{Signals Used By The System}
+
+\begin{center}
+\captionof{table}{Multi-signal scoring sources}
+\label{tab:scoring_signals}
+\renewcommand{\arraystretch}{0.8}
+
+\begin{tabularx}{\textwidth}{|p{4cm}|X|}
+\hline
+\rowcolor{gray!20} \textbf{Signal} & \textbf{Description} \\
+\hline
+Verbal sentiment & Derived from the candidate transcript using sentiment analysis \\
+\hline
+Emotion analysis & Computed from extracted video frames when a webcam feed is available \\
+\hline
+Engagement signal & Estimated from facial and speech behavior \\
+\hline
+Silence detection & Identifies empty, weak, or missing answers \\
+\hline
+Language compliance & Detects whether the candidate answered in the selected interview language \\
+\hline
+Identity check & Compares spoken name with registered candidate name and flags possible impersonation \\
+\hline
+Audio quality & Evaluates the quality of the speech capture \\
+\hline
+Lighting quality & Estimates whether the video environment is usable \\
+\hline
+Face detectability & Measures whether a face is visible often enough in the frames \\
+\hline
+Dissonance score & Detects mismatch between emotional signals and verbal content \\
+\hline
+Anomaly alerts & Compact warnings built from the full signal bundle \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsubsection{Scoring Dimensions}
+
+The interview produces four primary scores combined into an overall weighted result, as shown in Table~\ref{tab:scoring_dimensions}.
+
+\begin{center}
+\captionof{table}{Interview scoring dimensions and weights}
+\label{tab:scoring_dimensions}
+\renewcommand{\arraystretch}{0.8}
+
+\begin{tabularx}{\textwidth}{|l|l|c|}
+\hline
+\rowcolor{gray!20} \textbf{Dimension} & \textbf{What It Measures} & \textbf{Weight} \\
+\hline
+Communication & Clarity, fluency, tone, engagement & 25\% \\
+\hline
+Technical & Knowledge, depth, problem-solving & 30\% \\
+\hline
+Behavioral & Teamwork, adaptability, conflict handling & 25\% \\
+\hline
+Motivation & Alignment with role, company, and growth & 20\% \\
+\hline
+\end{tabularx}
+\end{center}
+
+The overall interview score is a weighted average of the four dimensions, normalized to 0--100 and accompanied by a recommendation tier: \texttt{strong\_hire}, \texttt{hire}, \texttt{maybe}, or \texttt{no\_hire}.
+
+\subsubsection{Session State Counters}
+
+The following counters are maintained in \texttt{session\_state} to make interview behavior consistent across turns, as shown in Table~\ref{tab:session_counters}.
+
+\begin{center}
+\captionof{table}{Session state counters}
+\label{tab:session_counters}
+\renewcommand{\arraystretch}{0.8}
+
+\begin{tabularx}{\textwidth}{|l|l|}
+\hline
+\rowcolor{gray!20} \textbf{Counter} & \textbf{Role} \\
+\hline
+\texttt{consecutive\_silences} & Triggers warning or session close \\
+\hline
+\texttt{identity\_warnings} & Escalates to session close on repeat \\
+\hline
+\texttt{language\_mismatch\_count} & Applies score penalties \\
+\hline
+\end{tabularx}
+\end{center}
+
+\subsection{LangGraph Complete Workflow}
+\label{sec:sprint4:langgraph_workflow}
+
+Figure~\ref{fig:langgraph_workflow} presents the complete recruitment workflow orchestrated by LangGraph. The pipeline processes applications, computes semantic matching, checks the job closing date, and then continues with shortlisting, interview scheduling, report generation, and final selection preparation. Conditional transitions are used when the job is still open or when interviews are not yet completed.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{langgraph_workflow.pdf}
+    \caption{LangGraph complete workflow stages}
+    \label{fig:langgraph_workflow}
+\end{figure}
+
+\subsection{Sequence Diagram}
+\label{sec:sprint4:sequence_diagram}
+
+The following sequence diagram summarizes the full interview lifecycle from invitation acceptance to report generation.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{images/sprint4_sequence.pdf}
+    \caption{Sequence Diagram of AI Interview Session Lifecycle}
+    \label{fig:sprint4_sequence}
+\end{figure}
+
+\subsection{Application Interfaces}
+\label{sec:sprint4:application_interfaces}
+
+Sprint 4 exposed the interview capabilities through both frontend screens and REST endpoints.
+
+\begin{spacing}{1.1}
+\begin{center}
+\captionof{table}{Application interfaces exposed by Sprint 4}
+\label{tab:sprint4_interfaces}
+\begin{tabularx}{\textwidth}{|p{4cm}|p{2.3cm}|X|p{3.8cm}|}
+\hline
+\rowcolor{gray!20}
+\textbf{Interface} & \textbf{Layer} & \textbf{Purpose} & \textbf{Main Data Exchanged} \\ \hline
+
+Candidate Interviews Page & Frontend & Lists interview invitations, schedules, and interview status. & Interview ID, status, language, phase, schedule, response state. \\ \hline
+Interview Room Page & Frontend & Runs the live AI interview session with audio and video capture. & Opening question, audio response, video capture, bot reply, timers. \\ \hline
+Interview Scheduling Page & Frontend & Lets the candidate select the interview day and language. & Available slots, selected date, selected language. \\ \hline
+Hiring Manager Final Selection Page & Frontend & Displays shortlisted candidates with CV score, interview score, and composite ranking. & Candidate ID, job ID, scores, recommendations, interview evidence. \\ \hline
+\texttt{GET /interviews/candidate/my-interviews} & REST API & Returns all interviews for the logged-in candidate. & Interview list with schedule, phase, language, and response state. \\ \hline
+\texttt{POST /interviews/candidate/\{id\}/start} & REST API & Starts the interview and returns the opening question. & Selected language, opening bot message, audio URL, turn number. \\ \hline
+\texttt{POST /interviews/candidate/\{id\}/turn} & REST API & Processes one candidate answer and generates the next bot turn. & Audio file, optional video file, transcript, bot reply, signals. \\ \hline
+\texttt{POST /interviews/candidate/\{id\}/end} & REST API & Closes the interview session and triggers report generation. & Completion status and confirmation message. \\ \hline
+\texttt{GET /interviews/candidate/\{id\}/scores} & REST API & Returns the interview evaluation report to the candidate. & Overall score, sub-scores, recommendation, strengths, weaknesses. \\ \hline
+\texttt{GET /interviews/candidate/\{id\}/time-slots} & REST API & Returns available interview days. & One-week slot list with availability and formatted labels. \\ \hline
+\texttt{PATCH /interviews/candidate/\{id\}/language} & REST API & Updates the interview language before the session starts. & Language choice: English or French. \\ \hline
+\texttt{POST /interviews/candidate/\{id\}/select-time} & REST API & Confirms the selected interview day. & Selected datetime, language, meeting link, scheduled timestamp. \\ \hline
+\texttt{GET /manager/final-selection/\{job\_id\}} & REST API & Returns ranked shortlisted candidates and interview evidence for hiring managers. & CV score, interview score, composite score, recommendations. \\ \hline
+
+\end{tabularx}
+\end{center}
+\end{spacing}
+
+\subsection{Sprint 4 Outcomes}
+\label{sec:sprint4:outcomes}
+
+At the end of Sprint 4, the platform delivered a fully operational AI interview workflow. The outcomes are summarized in Table~\ref{tab:sprint4_outcomes}.
+
+\begin{center}
+\captionof{table}{Sprint 4 outcomes}
+\label{tab:sprint4_outcomes}
+\renewcommand{\arraystretch}{0.8}
+
+\begin{tabular}{|l|c|}
+\hline
+\rowcolor{gray!20} \textbf{Deliverable} & \textbf{Status} \\
+\hline
+Interview Scheduling And Invitation System & Completed \\
+\hline
+Live Video Interview Room With Media Capture & Completed \\
+\hline
+Speech-To-Text Transcription Integration & Completed \\
+\hline
+Text-To-Speech Bot Response Generation & Completed \\
+\hline
+Emotion Analysis And Soft-Signal Processing & Completed \\
+\hline
+Multi-Signal Scoring System & Completed \\
+\hline
+Interview Gates (Silence, Identity, Language) & Completed \\
+\hline
+Session Quality Monitoring (Lighting, Audio, Face) & Completed \\
+\hline
+Phase-Based Interview Progression & Completed \\
+\hline
+Structured Interview Report Generation & Completed \\
+\hline
+Fallback Report For Early-Ended Sessions & Completed \\
+\hline
+Hiring-Manager Final Selection Integration & Completed \\
+\hline
+LangGraph Full Workflow Integration & Completed \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Conclusion}
+Sprint 4 completed the platform's core interview pipeline. Candidates can join live AI-driven interviews, answer adaptive questions across structured phases, and receive structured feedback. The system captures and analyzes audio and video, produces multi-signal scores, and generates evaluation reports that are surfaced to hiring managers during final selection. Interview evidence is persisted and made available in downstream decision views, enabling informed hiring decisions while preserving the human-in-the-loop decision model throughout.
+
+\section{ Key Engineering Challenges and Solutions}
+During implementation, several AI-related difficulties required architectural adjustments. The most significant ones are summarized in Table~\ref{tab:implementation_challenges}.
+\begin{center}
+\captionof{table}{Technical challenges and solutions}
+\label{tab:implementation_challenges}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{|l|X|X|}
+\hline
+\rowcolor{gray!20}
+\textbf{Challenge} & \textbf{Impact} & \textbf{Solution} \\
+\hline
+STT hallucinations & Invalid transcripts from silent or poor audio & Anti-hallucination filter + silence detection \\
+\hline
+NER model tuning & GLiNER and XLM-RoBERTa NER were insufficient for CV extraction & LLM-based structured JSON extraction \\
+\hline
+
+Job closing and automatic shortlisting &
+Shortlisting and interview invitations had to be triggered at the correct time when a job closes; otherwise, the pipeline could invite candidates too early or miss valid applicants after closing. &
+A job closing service was implemented with Celery/Redis background processing and LangGraph orchestration to rank applicants, shortlist top candidates, and send interview invitations automatically. \\
+\hline
+Final selection score fusion &
+CV matching and interview evaluation produce different types of scores from different stages of the pipeline, making candidate comparison difficult for hiring managers. &
+A composite ranking view was implemented in Final Selection, combining CV score, interview score, and overall recommendation in one interface. \\
+\hline
+Absence of a labeled benchmark dataset &
+The project did not include a large annotated dataset to train or objectively benchmark matching and extraction quality. &
+Pre-trained models, prototype testing, qualitative review, and human-controlled final hiring were used instead of custom supervised training. \\
+\hline
+
+\end{tabularx}
+\end{center}
+
+\section*{Conclusion}
+\addcontentsline{toc}{section}{Conclusion}
+This chapter presented the four main implementation sprints of TalentOs. Sprint~1 delivered the secure platform foundation; Sprint~2 introduced OCR and NER-based CV structuring; Sprint~3 added semantic matching and hiring-manager RAG assistance; and Sprint~4 completed the multimodal AI interview workflow and LangGraph orchestration. Together, these sprints transformed the initial platform skeleton into an integrated AI-assisted recruitment system ready for validation and deployment in Chapter~5.
