@@ -18,7 +18,7 @@ from core.dependencies import get_current_user, require_role
 from core.security import hash_password
 from core.email_utils import normalize_email
 from pydantic import BaseModel, EmailStr
-from services.ocr_service import ocr_service
+from core.cv_upload import CV_ACCEPTED_MESSAGE, extract_cv_text, is_allowed_cv_filename
 from services.ner_service import ner_service
 from models.notification import Notification
 from schemas.notification import NotificationListResponse, NotificationResponse
@@ -127,26 +127,21 @@ def get_job_detail(
 # ─────────────────────────────
 
 @router.post("/signup/cv")
-async def signup_by_cv(
+def signup_by_cv(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    # Read file
-    contents = await file.read()
+    """Sync handler so OCR/NER work runs off the asyncio event loop."""
+    contents = file.file.read()
 
-    # Basic validation
-    if not file.filename.endswith(('.pdf', '.doc', '.docx')):
+    if not is_allowed_cv_filename(file.filename):
         raise HTTPException(
             status_code=400,
-            detail="Only PDF, DOC, DOCX files are accepted"
+            detail=CV_ACCEPTED_MESSAGE,
         )
 
-    # Parse CV using integrated OCR + NER pipeline
     try:
-        if file.filename.lower().endswith(".pdf"):
-            cv_text = ocr_service.extract_text_from_bytes(contents)
-        else:
-            cv_text = contents.decode("utf-8", errors="ignore")
+        cv_text = extract_cv_text(file.filename, contents)
 
         if not cv_text or len(cv_text.strip()) < 30:
             raise HTTPException(
@@ -162,6 +157,10 @@ async def signup_by_cv(
             status_code=400,
             detail=f"CV parsing failed: {str(e)}"
         )
+
+    from services.cv_storage import save_pending_cv_upload
+
+    cv_upload_id = save_pending_cv_upload(contents, file.filename, parsed)
 
     contact = parsed.get("contact", {}) if isinstance(parsed, dict) else {}
     skills_obj = parsed.get("skills", {}) if isinstance(parsed, dict) else {}
@@ -203,9 +202,11 @@ async def signup_by_cv(
         "extracted_email": extracted.get("email", ""),
         "extracted_phone": extracted.get("phone", ""),
         "extracted_skills": extracted.get("skills", []),
+        "parsed_cv": parsed,
         "account_exists": account_exists,
         "confidence_score": confidence_score,
         "file_name": file.filename,
+        "cv_upload_id": cv_upload_id,
         "message": "CV parsed successfully. Please confirm your information."
     }
 
@@ -220,6 +221,11 @@ class SignupConfirmRequest(BaseModel):
     extracted_skills: Optional[list] = []
     password: str
     job_id: Optional[str] = None
+    cv_upload_id: Optional[str] = None
+
+
+class AttachCvUploadRequest(BaseModel):
+    cv_upload_id: str
 
 @router.post("/signup/confirm", status_code=201)
 def confirm_signup(
@@ -267,6 +273,16 @@ def confirm_signup(
     )
     db.add(candidate)
     db.commit()
+    db.refresh(candidate)
+
+    if payload.cv_upload_id:
+        from services.cv_storage import attach_pending_upload_to_candidate
+
+        try:
+            attach_pending_upload_to_candidate(db, candidate.candidate_id, payload.cv_upload_id)
+            db.commit()
+        except (FileNotFoundError, ValueError) as exc:
+            logger.warning("Could not attach CV on signup for %s: %s", normalized_email, exc)
 
     # NOTE: We intentionally do NOT auto-create an application here.
     # The candidate must explicitly apply via POST /candidate/apply/{job_id}.
@@ -277,6 +293,39 @@ def confirm_signup(
         "message": "Account created successfully",
         "user_id": user.user_id,
         "email": user.email
+    }
+
+
+@router.post("/cv/attach-upload")
+def attach_cv_upload(
+    payload: AttachCvUploadRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.CANDIDATE)),
+):
+    """Attach a pending CV upload (from browse/signup) to the logged-in candidate."""
+    from services.cv_job_matching import rematch_all_applications_for_candidate
+    from services.cv_storage import attach_pending_upload_to_candidate
+
+    candidate = db.query(Candidate).filter(Candidate.user_id == current_user.user_id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    try:
+        cv_version = attach_pending_upload_to_candidate(
+            db, candidate.candidate_id, payload.cv_upload_id
+        )
+        rematch_all_applications_for_candidate(db, candidate.candidate_id)
+        db.commit()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="CV upload expired or not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {
+        "message": "CV saved successfully",
+        "cv_id": cv_version.cv_id,
+        "file_name": cv_version.file_name,
+        "version_number": cv_version.version_number,
     }
 
 # ─────────────────────────────
@@ -375,9 +424,9 @@ def apply_to_job(
             detail="Candidate profile not found"
         )
 
-    from services.job_closing_service import deactivate_expired_jobs
+    from services.job_closing_service import sync_job_closings
 
-    deactivate_expired_jobs(db)
+    sync_job_closings(db)
 
     job = db.query(JobOffer).filter(
         JobOffer.job_id == job_id,
@@ -535,6 +584,10 @@ def get_candidate_notifications(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.CANDIDATE))
 ):
+    from services.job_closing_service import sync_job_closings
+
+    sync_job_closings(db)
+
     notifications = db.query(Notification).filter(
         Notification.user_id == current_user.user_id
     ).order_by(Notification.created_at.desc()).all()

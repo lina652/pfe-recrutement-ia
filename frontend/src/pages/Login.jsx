@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { flushSync } from "react-dom"
 import { useNavigate, useLocation } from "react-router-dom"
 import { login as loginApi, getMe, applyToJob } from "../api/authApi"
 import { useAuth } from "../context/AuthContext"
@@ -32,8 +33,10 @@ export default function Login() {
       localStorage.setItem("access_token", tokens.access_token)
       localStorage.setItem("refresh_token", tokens.refresh_token)
       const meRes = await getMe()
-      login(tokens, meRes.data)
-      if (location.state?.fromCv && location.state?.pendingJobId && tokens.role === "CANDIDATE") {
+      const userData = meRes.data
+      const role = userData?.role || tokens.role
+      flushSync(() => login(tokens, userData))
+      if (location.state?.fromCv && location.state?.pendingJobId && role === "CANDIDATE") {
         try {
           await applyToJob(location.state.pendingJobId)
         } catch {
@@ -41,13 +44,22 @@ export default function Login() {
         }
       }
       const redirectTo = location.state?.redirectTo
-      if (redirectTo && tokens.role === "CANDIDATE" && redirectTo.startsWith("/candidate/")) {
+      if (redirectTo && role === "CANDIDATE" && redirectTo.startsWith("/candidate/")) {
         navigate(redirectTo, { replace: true })
       } else {
-        navigate(ROLE_REDIRECT[tokens.role] || "/")
+        navigate(ROLE_REDIRECT[role] || "/")
       }
     } catch (err) {
-      setError(err.response?.data?.detail || "Login failed")
+      if (!err.response) {
+        setError(
+          err.code === "ECONNABORTED"
+            ? "Server took too long to respond. Check that the backend is running on port 8000."
+            : "Cannot reach the server. Start the backend (uvicorn main:app --port 8000) and try again."
+        )
+      } else {
+        const detail = err.response?.data?.detail
+        setError(typeof detail === "string" ? detail : "Login failed")
+      }
     } finally {
       setLoading(false)
     }

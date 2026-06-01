@@ -17,6 +17,7 @@ import {
   filterJobsByCategory,
   countJobsByCategory,
 } from "../../constants/matchCategories"
+import { CV_ACCEPT } from "../../constants/cvUpload"
 
 const SESSION_KEY = "talentos_ranked_jobs"
 const SESSION_CV_KEY = "talentos_cv_name"
@@ -237,7 +238,13 @@ export default function Jobs() {
 
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(rankedJobs))
         sessionStorage.setItem(SESSION_CV_KEY, data.cv?.extracted_name || "")
-        sessionStorage.setItem(SESSION_CV_DATA_KEY, JSON.stringify(data.cv || {}))
+        sessionStorage.setItem(
+          SESSION_CV_DATA_KEY,
+          JSON.stringify({
+            ...(data.cv || {}),
+            cv_upload_id: data.cv?.cv_upload_id ?? data.cv_upload_id ?? null,
+          })
+        )
 
         // Show appropriate toast
         if (data.cv?.account_exists) {
@@ -321,7 +328,7 @@ export default function Jobs() {
           >
             📄 {t.uploadCV}
           </label>
-          <input id="upload-cv-hero" type="file" accept=".pdf,.doc,.docx" style={{ display: "none" }}
+          <input id="upload-cv-hero" type="file" accept={CV_ACCEPT} style={{ display: "none" }}
             onChange={(e) => {
               const selectedFile = e.target.files?.[0]
               if (selectedFile) handleCVUpload(selectedFile)

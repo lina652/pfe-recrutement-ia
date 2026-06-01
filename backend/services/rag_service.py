@@ -59,9 +59,15 @@ class RAGService:
         }
 
     def _parse_candidate_cv(self, db: Session, candidate_id: str):
+        from models.candidate import Candidate
         from models.cv_version import CVVersion
-        from services.ocr_service import ocr_service
-        from services.ner_service import ner_service
+        from services.cv_job_matching import load_parsed_cv
+
+        candidate = (
+            db.query(Candidate).filter(Candidate.candidate_id == candidate_id).first()
+        )
+        if not candidate:
+            return None
 
         cv = db.query(CVVersion).filter(
             CVVersion.candidate_id == candidate_id,
@@ -71,17 +77,10 @@ class RAGService:
             CVVersion.uploaded_at.desc()
         ).first()
 
-        if not cv or not cv.file_path:
+        if not cv or not cv.file_path or not os.path.exists(cv.file_path):
             return None
 
-        if not os.path.exists(cv.file_path):
-            return None
-
-        cv_text = ocr_service.extract_text(cv.file_path)
-        if not cv_text or len(cv_text.strip()) < 30:
-            return None
-
-        return ner_service.parse_cv(cv_text)
+        return load_parsed_cv(db, candidate)
 
     def _compute_semantic_matching(self, db: Session, candidate, job) -> dict:
         from services.cv_job_matching import match_candidate_to_job
@@ -324,14 +323,17 @@ Education: {job_req.get('education', {}).get('degree', 'N/A')}
 
         user = db.query(User).filter(User.user_id == candidate.user_id).first()
 
-        full_name = "Unknown Candidate"
+        full_name = ""
         email = "N/A"
         phone = candidate.phone or "N/A"
         if user:
-            full_name = f"{user.first_name} {user.last_name}".strip()
-            email = user.email
+            full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+            email = user.email or "N/A"
 
         ner_data = None
+        from models.cv_version import CVVersion
+        from services.cv_job_matching import load_parsed_cv
+
         cv = (
             db.query(CVVersion)
             .filter(
@@ -344,15 +346,25 @@ Education: {job_req.get('education', {}).get('degree', 'N/A')}
 
         if cv and cv.file_path and os.path.exists(cv.file_path):
             try:
-                cv_text = ocr_service.extract_text(cv.file_path)
-                if cv_text and len(cv_text.strip()) >= 30:
-                    ner_data = ner_service.parse_cv(cv_text)
+                ner_data = load_parsed_cv(db, candidate)
             except Exception as ner_error:
                 logger.warning(
                     "Could not extract NER data for candidate %s: %s",
                     candidate.candidate_id,
                     ner_error,
                 )
+
+        if not full_name and ner_data:
+            full_name = (ner_data.get("name") or "").strip()
+            if not email or email == "N/A":
+                contact = ner_data.get("contact", {}) if isinstance(ner_data, dict) else {}
+                email = (contact.get("email") or email or "N/A").strip() or "N/A"
+                if not phone or phone == "N/A":
+                    phone = (contact.get("phone") or phone or "N/A").strip() or "N/A"
+        if not full_name and email != "N/A":
+            full_name = email
+        if not full_name:
+            full_name = "Unknown Candidate"
 
         ner_section = "NER EXTRACTION FROM CV:\n"
         if ner_data:

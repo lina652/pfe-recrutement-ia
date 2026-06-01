@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 def load_parsed_cv(db: Session, candidate: Candidate) -> dict:
-    """OCR + NER on active CV, or fallback to profile skills only."""
+    """Load cached full CV parse, or OCR + NER on active CVVersion."""
+    from services.cv_storage import read_parsed_cache, write_parsed_cache
+
     cv = (
         db.query(CVVersion)
         .filter(
@@ -34,10 +36,15 @@ def load_parsed_cv(db: Session, candidate: Candidate) -> dict:
     )
 
     if cv and cv.file_path and os.path.exists(cv.file_path):
+        cached = read_parsed_cache(cv.file_path)
+        if cached:
+            return cached
         try:
             cv_text = ocr_service.extract_text(cv.file_path)
             if cv_text and len(cv_text.strip()) >= 30:
-                return ner_service.parse_cv(cv_text)
+                parsed = ner_service.parse_cv(cv_text)
+                write_parsed_cache(cv.file_path, parsed)
+                return parsed
         except Exception as exc:
             logger.warning(
                 "CV parse failed for candidate %s: %s",
@@ -47,6 +54,10 @@ def load_parsed_cv(db: Session, candidate: Candidate) -> dict:
 
     raw_skills = candidate.skills or ""
     skills = [s.strip() for s in raw_skills.split(",") if s.strip()]
+    logger.warning(
+        "No active CV file for candidate %s — matching with profile skills only",
+        candidate.candidate_id,
+    )
     return {
         "skills": {"technical": skills, "soft": []},
         "education": [],

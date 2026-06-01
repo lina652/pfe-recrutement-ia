@@ -3,7 +3,8 @@ import axios from "axios"
 export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
 
 const API = axios.create({
-  baseURL: API_BASE_URL
+  baseURL: API_BASE_URL,
+  timeout: 30000,
 })
 
 API.interceptors.request.use((config) => {
@@ -76,6 +77,8 @@ export const matchJobsByProfile = (params) => API.get("/public/jobs/match-profil
 // Candidate signup — no auth needed
 export const uploadCV = (formData) => axios.post(`${API_BASE_URL}/candidate/signup/cv`, formData)
 export const confirmSignup = (data) => axios.post(`${API_BASE_URL}/candidate/signup/confirm`, data)
+export const attachCvUpload = (cvUploadId) =>
+  API.post("/candidate/cv/attach-upload", { cv_upload_id: cvUploadId })
 
 // Candidate — auth needed
 export const getCandidateProfile = () => API.get("/candidate/profile")

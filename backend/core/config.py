@@ -18,9 +18,10 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     FRONTEND_URL: str = "http://localhost:5173"
     
-    # 3. Embedding config
-    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
+    # 3. Embedding config (multilingual model improves FR CV vs EN job matching)
+    EMBEDDING_MODEL: str = "paraphrase-multilingual-MiniLM-L12-v2"
     EMBEDDING_DIM: int = 384
+    SKILL_MATCH_THRESHOLD: float = 0.42
 
     # 4. Interview Bot Config
     INTERVIEW_MAX_TURNS: int = 12
@@ -29,6 +30,9 @@ class Settings(BaseSettings):
     INTERVIEW_TESTING_MODE: bool = False
     GROQ_STT_MODEL: str = "whisper-large-v3-turbo"
     GROQ_LLM_MODEL: str = "llama-3.3-70b-versatile"
+    # OCR (PaddleOCR fallback for scanned CVs): en, fr (FR+EN latin script), etc.
+    OCR_LANG: str = "fr"
+    GROQ_VISION_MODEL: str = "meta-llama/llama-4-scout-17b-16e-instruct"
     # STT: prompt neutre anti-hallucination (voir stt_antihallucination.py)
     GROQ_STT_PROMPT: str = "Bonjour. Oui. Merci."
     # Sentiment texte du candidat (transformers, chargement lazy)

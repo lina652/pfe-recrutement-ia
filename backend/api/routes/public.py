@@ -11,7 +11,7 @@ from models.user import User, UserRole
 from models.candidate import Candidate
 from models.interview import Interview, InterviewStatus
 from core.dependencies import require_role
-from services.ocr_service import ocr_service
+from core.cv_upload import CV_ACCEPTED_MESSAGE, extract_cv_text, is_allowed_cv_filename
 from services.ner_service import ner_service
 from services.interview_scheduling import (
     build_slots_payload,
@@ -25,8 +25,8 @@ router = APIRouter(prefix="/public", tags=["Public"])
 
 
 def _sync_close_expired_jobs(db: Session) -> None:
-    """Hide expired jobs and trigger interview invites (notifications + email)."""
-    sync_job_closings(db, background=True)
+    """Hide expired jobs and run interview invites (notifications + email) synchronously."""
+    sync_job_closings(db)
 
 
 def _public_jobs_query(db: Session):
@@ -227,7 +227,7 @@ def match_jobs_by_candidate_profile(
 
 
 @router.post("/jobs/match-cv")
-async def match_jobs_by_cv(
+def match_jobs_by_cv(
     file: UploadFile = File(...),
     search: Optional[str] = None,
     location: Optional[str] = None,
@@ -239,15 +239,13 @@ async def match_jobs_by_cv(
     company_id: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    if not file.filename or not file.filename.lower().endswith((".pdf", ".doc", ".docx")):
-        raise HTTPException(status_code=400, detail="Only PDF, DOC, DOCX files are accepted")
+    """Sync handler so OCR/embedding work runs off the asyncio event loop."""
+    if not is_allowed_cv_filename(file.filename):
+        raise HTTPException(status_code=400, detail=CV_ACCEPTED_MESSAGE)
 
-    contents = await file.read()
+    contents = file.file.read()
     try:
-        if file.filename.lower().endswith(".pdf"):
-            cv_text = ocr_service.extract_text_from_bytes(contents)
-        else:
-            cv_text = contents.decode("utf-8", errors="ignore")
+        cv_text = extract_cv_text(file.filename, contents)
 
         if not cv_text or len(cv_text.strip()) < 30:
             raise HTTPException(status_code=400, detail="Unable to extract enough text from CV")
@@ -257,6 +255,10 @@ async def match_jobs_by_cv(
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"CV parsing failed: {str(e)}")
+
+    from services.cv_storage import save_pending_cv_upload
+
+    cv_upload_id = save_pending_cv_upload(contents, file.filename, parsed)
 
     skills_obj = parsed.get("skills", {}) if isinstance(parsed, dict) else {}
     technical = skills_obj.get("technical", []) if isinstance(skills_obj, dict) else []
@@ -311,7 +313,9 @@ async def match_jobs_by_cv(
             "extracted_email": extracted_email,
             "extracted_phone": extracted_phone,
             "account_exists": account_exists,
-            "extracted_skills": cv_skills
+            "extracted_skills": cv_skills,
+            "parsed_cv": parsed,
+            "cv_upload_id": cv_upload_id,
         }
     }
 

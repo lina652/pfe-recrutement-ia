@@ -4,6 +4,7 @@ Interview orchestration service - coordinates all interview components.
 import logging
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Tuple, List
 from datetime import datetime
@@ -828,16 +829,21 @@ class InterviewService:
         db.add(report)
         db.commit()
 
-        try:
-            from services.rag_service import get_rag_service
+        job_id = interview.job_id
 
-            get_rag_service().refresh_vector_store(interview.job_id)
-        except Exception as rag_exc:
-            logger.warning(
-                "Could not refresh RAG index for job %s: %s",
-                interview.job_id,
-                rag_exc,
-            )
+        def _refresh_rag_index() -> None:
+            try:
+                from services.rag_service import get_rag_service
+
+                get_rag_service().refresh_vector_store(job_id)
+            except Exception as rag_exc:
+                logger.warning(
+                    "Could not refresh RAG index for job %s: %s",
+                    job_id,
+                    rag_exc,
+                )
+
+        threading.Thread(target=_refresh_rag_index, daemon=True).start()
 
         logger.info(
             "Saved interview report for %s: %s",

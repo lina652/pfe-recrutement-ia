@@ -107,24 +107,185 @@ def close_due_jobs(db: Session) -> int:
     """Deactivate expired jobs, then run shortlist/interview pipeline (sync)."""
     deactivate_expired_jobs(db)
     job_ids = jobs_pending_closing_pipeline(db)
-    return run_closing_pipeline(db, job_ids)
+    processed = run_closing_pipeline(db, job_ids)
+    repair_missing_interview_invites(db)
+    return processed
+
+
+def _invite_notification_exists(db: Session, user_id: str, interview_id: str) -> bool:
+    return (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == user_id,
+            Notification.reference_id == interview_id,
+            Notification.type == "INTERVIEW_TIME_SELECTION",
+        )
+        .first()
+        is not None
+    )
+
+
+def _create_interview_invite(
+    db: Session,
+    job: JobOffer,
+    app: Application,
+    candidate: Candidate,
+    user: User,
+    available_days: list[datetime],
+) -> Interview:
+    """Create/update interview row, in-app notification, and optional email."""
+    existing_interview = (
+        db.query(Interview).filter(Interview.application_id == app.app_id).first()
+    )
+    if existing_interview:
+        interview = existing_interview
+        interview.status = InterviewStatus.INVITED
+    else:
+        interview = Interview(
+            interview_id=str(uuid.uuid4()),
+            application_id=app.app_id,
+            candidate_id=candidate.candidate_id,
+            job_id=job.job_id,
+            language="en",
+            status=InterviewStatus.INVITED,
+            auto_scheduled=False,
+        )
+        db.add(interview)
+        db.flush()
+        interview.meeting_link = (
+            f"{settings.FRONTEND_URL}/candidate/interview/{interview.interview_id}"
+        )
+
+    if not _invite_notification_exists(db, candidate.user_id, interview.interview_id):
+        schedule_token = ensure_schedule_token(interview)
+        pick_url = schedule_pick_url(schedule_token)
+        interviews_url = candidate_interviews_url()
+        display_name = (user.first_name or "").strip() or "Candidate"
+
+        notification = Notification(
+            notification_id=str(uuid.uuid4()),
+            user_id=candidate.user_id,
+            company_id=job.company_id,
+            title=f"Congratulations! Interview Invitation for {job.title}",
+            message=(
+                f"You have been selected among the top candidates for {job.title}! "
+                "Please select your preferred interview day in your dashboard."
+            ),
+            type="INTERVIEW_TIME_SELECTION",
+            reference_id=interview.interview_id,
+            is_read=False,
+        )
+        db.add(notification)
+        db.flush()
+        logger.info(
+            "Interview invite: job=%s candidate=%s notification=%s",
+            job.job_id,
+            candidate.candidate_id,
+            notification.notification_id,
+        )
+
+        days_text = "\n".join(
+            [d.strftime("%A %d %B %Y") for d in available_days[:7]]
+        )
+        subject = f"Interview Invitation - {job.title} | TalentOs"
+        body = f"""Hello {display_name},
+
+Congratulations! You have been selected among the top candidates for {job.title} at {job.company_name}.
+
+Choose your interview language and day (no login required):
+
+{pick_url}
+
+Or sign in to your dashboard: {interviews_url}
+
+Available days (today and the next 6 days):
+{days_text}
+
+Best regards,
+{settings.APP_NAME}"""
+
+        html_body = f"""<html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+        <p>Hello <strong>{display_name}</strong>,</p>
+        <p>Congratulations! You have been shortlisted for <strong>{job.title}</strong> at {job.company_name}.</p>
+        <p style="margin:24px 0;">
+          <a href="{pick_url}" style="display:inline-block;padding:14px 28px;background:#7B5AC8;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold;">
+            Select language &amp; interview day
+          </a>
+        </p>
+        <p style="color:#6b7280;font-size:14px;">Pick English or French, then choose a day on the calendar. You can start anytime that day. You can also <a href="{interviews_url}">sign in to your dashboard</a>.</p>
+        </body></html>"""
+        if user.email:
+            sent = send_email(user.email, subject, body, html=html_body)
+            if not sent:
+                logger.warning("Email not sent to %s (check SMTP settings)", user.email)
+
+    return interview
+
+
+def repair_missing_interview_invites(db: Session) -> int:
+    """
+    Re-send invites for shortlisted candidates who never got a notification
+    (e.g. background pipeline crash or partial closing run).
+    """
+    repaired = 0
+    start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    available_days = generate_interview_days(start_date, days=7)
+
+    for job in _jobs_past_closing(db):
+        shortlisted = (
+            db.query(Application)
+            .filter(
+                Application.job_id == job.job_id,
+                Application.status == ApplicationStatus.SHORTLISTED,
+            )
+            .all()
+        )
+        if not shortlisted:
+            continue
+
+        for app in shortlisted:
+            candidate = (
+                db.query(Candidate)
+                .filter(Candidate.candidate_id == app.candidate_id)
+                .first()
+            )
+            if not candidate:
+                continue
+            user = db.query(User).filter(User.user_id == candidate.user_id).first()
+            if not user:
+                continue
+
+            interview = (
+                db.query(Interview).filter(Interview.application_id == app.app_id).first()
+            )
+            if interview and interview.status != InterviewStatus.INVITED:
+                continue
+            if interview and _invite_notification_exists(
+                db, candidate.user_id, interview.interview_id
+            ):
+                continue
+
+            _create_interview_invite(db, job, app, candidate, user, available_days)
+            repaired += 1
+
+    if repaired:
+        db.commit()
+        logger.info("Repaired %d missing interview invitation(s)", repaired)
+    return repaired
 
 
 def sync_job_closings(db: Session, background: bool = False) -> None:
     """
     Hide expired jobs from public listings and run interview-invite pipeline.
-    Runs synchronously by default so notifications/emails are not lost.
+    Invites/notifications run synchronously so they are not lost if the worker thread dies.
     """
     try:
         deactivate_expired_jobs(db)
         job_ids = jobs_pending_closing_pipeline(db)
-        if not job_ids:
-            return
-        logger.info("Running closing pipeline for %d job(s): %s", len(job_ids), job_ids)
-        if background:
-            _run_closing_pipeline_background(job_ids)
-        else:
+        if job_ids:
+            logger.info("Running closing pipeline for %d job(s): %s", len(job_ids), job_ids)
             run_closing_pipeline(db, job_ids)
+        repair_missing_interview_invites(db)
     except Exception as exc:
         logger.exception("sync_job_closings failed: %s", exc)
 
@@ -173,7 +334,7 @@ def execute_job_closing(db: Session, job_id: str) -> dict:
             {"application": app, "candidate": candidate, "score": score}
         )
 
-    db.commit()
+    db.flush()
 
     scored_applications.sort(key=lambda x: x["score"], reverse=True)
     top_10 = scored_applications[:10]
@@ -187,112 +348,28 @@ def execute_job_closing(db: Session, job_id: str) -> dict:
         db.commit()
         return {"status": "completed", "job_id": job_id, "total_applications": len(applications), "selected_count": 0, "reason": "no_scorable_candidates"}
 
-    start_date = datetime.utcnow() + timedelta(days=1)
+    start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     available_days = generate_interview_days(start_date, days=7)
 
+    invited_app_ids: set[str] = set()
     for item in top_10:
         app = item["application"]
         candidate = item["candidate"]
 
         user = db.query(User).filter(User.user_id == candidate.user_id).first()
-        if not user or not (user.first_name or user.last_name or user.email):
+        if not user:
             logger.warning(
-                "No valid user profile for candidate %s — skipping shortlist/invite",
+                "No user account for candidate %s — cannot send interview invite",
                 candidate.candidate_id,
             )
             continue
 
         app.status = ApplicationStatus.SHORTLISTED
+        invited_app_ids.add(app.app_id)
+        _create_interview_invite(db, job, app, candidate, user, available_days)
 
-        if not user.email:
-            logger.warning("No email for user %s — skipping mail", user.user_id)
-
-        existing_interview = (
-            db.query(Interview).filter(Interview.application_id == app.app_id).first()
-        )
-        if existing_interview:
-            interview = existing_interview
-            interview.status = InterviewStatus.INVITED
-        else:
-            interview = Interview(
-                interview_id=str(uuid.uuid4()),
-                application_id=app.app_id,
-                candidate_id=candidate.candidate_id,
-                job_id=job_id,
-                language="en",
-                status=InterviewStatus.INVITED,
-                auto_scheduled=False,
-            )
-            db.add(interview)
-            db.flush()
-            interview.meeting_link = (
-                f"{settings.FRONTEND_URL}/candidate/interview/{interview.interview_id}"
-            )
-
-        schedule_token = ensure_schedule_token(interview)
-        pick_url = schedule_pick_url(schedule_token)
-        interviews_url = candidate_interviews_url()
-
-        notification = Notification(
-            notification_id=str(uuid.uuid4()),
-            user_id=candidate.user_id,
-            company_id=job.company_id,
-            title=f"Congratulations! Interview Invitation for {job.title}",
-            message=(
-                f"You have been selected among the top candidates for {job.title}! "
-                "Please select your preferred interview day in your dashboard."
-            ),
-            type="INTERVIEW_TIME_SELECTION",
-            reference_id=interview.interview_id,
-            is_read=False,
-        )
-        db.add(notification)
-        db.flush()
-        logger.info(
-            "Interview invite: job=%s candidate=%s notification=%s",
-            job_id,
-            candidate.candidate_id,
-            notification.notification_id,
-        )
-
-        days_text = "\n".join(
-            [d.strftime("%A %d %B %Y") for d in available_days[:7]]
-        )
-        subject = f"Interview Invitation - {job.title} | TalentOs"
-        body = f"""Hello {user.first_name},
-
-Congratulations! You have been selected among the top candidates for {job.title} at {job.company_name}.
-
-Choose your interview language and day (no login required):
-
-{pick_url}
-
-Or sign in to your dashboard: {interviews_url}
-
-Available days (next week):
-{days_text}
-
-Best regards,
-{settings.APP_NAME}"""
-
-        html_body = f"""<html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-        <p>Hello <strong>{user.first_name}</strong>,</p>
-        <p>Congratulations! You have been shortlisted for <strong>{job.title}</strong> at {job.company_name}.</p>
-        <p style="margin:24px 0;">
-          <a href="{pick_url}" style="display:inline-block;padding:14px 28px;background:#7B5AC8;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold;">
-            Select language &amp; interview day
-          </a>
-        </p>
-        <p style="color:#6b7280;font-size:14px;">Pick English or French, then choose a day on the calendar. You can start anytime that day. You can also <a href="{interviews_url}">sign in to your dashboard</a>.</p>
-        </body></html>"""
-        if user.email:
-            sent = send_email(user.email, subject, body, html=html_body)
-            if not sent:
-                logger.warning("Email not sent to %s (check SMTP settings)", user.email)
-
-    shortlisted_ids = {item["application"].app_id for item in top_10}
     for app in applications:
-        if app.app_id not in shortlisted_ids and app.status == ApplicationStatus.PENDING:
+        if app.app_id not in invited_app_ids and app.status == ApplicationStatus.PENDING:
             app.status = ApplicationStatus.REJECTED
 
     job.closing_processed = True

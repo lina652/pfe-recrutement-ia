@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { uploadCV, confirmSignup, login, getMe, applyToJob, getMyApplications } from "../../api/authApi"
+import { uploadCV, confirmSignup, login, getMe, applyToJob, getMyApplications, attachCvUpload } from "../../api/authApi"
 import { useAuth } from "../../context/AuthContext"
 import { useLanguage } from "../../context/LanguageContext"
 import { formFieldClass } from "../../utils/formValidation"
+import { CV_ACCEPT } from "../../constants/cvUpload"
 
 const ALERT_STYLES = {
   success: "border-slate-200 bg-white text-slate-800",
@@ -266,6 +267,15 @@ export default function ApplyJobModal({
     handleUpload(selectedFile)
   }
 
+  const attachStoredCv = async (cvUploadId) => {
+    if (!cvUploadId) return
+    try {
+      await attachCvUpload(cvUploadId)
+    } catch (err) {
+      console.warn("CV attach after signup:", err.response?.data?.detail || err.message)
+    }
+  }
+
   const handleConfirm = async () => {
     const normalizedEmail = (extracted?.extracted_email || "").trim().toLowerCase()
     if (!normalizedEmail) {
@@ -287,6 +297,7 @@ export default function ApplyJobModal({
           extracted_phone: extracted.extracted_phone,
           extracted_skills: extracted.extracted_skills,
           password,
+          cv_upload_id: extracted.cv_upload_id || null,
         })
         loginRes = await login({ email: normalizedEmail, password })
       }
@@ -295,6 +306,10 @@ export default function ApplyJobModal({
       localStorage.setItem("refresh_token", loginRes.data.refresh_token)
       const meRes = await getMe()
       authLogin(loginRes.data, meRes.data)
+
+      if (extracted?.account_exists && extracted?.cv_upload_id) {
+        await attachStoredCv(extracted.cv_upload_id)
+      }
 
       try {
         await applyToJob(jobId)
@@ -490,7 +505,7 @@ export default function ApplyJobModal({
           <input
             id="apply-cv-upload"
             type="file"
-            accept=".pdf,.doc,.docx"
+            accept={CV_ACCEPT}
             onChange={handleFileSelect}
             className="sr-only"
             disabled={loading}

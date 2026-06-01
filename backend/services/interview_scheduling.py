@@ -67,10 +67,7 @@ def build_slots_payload(
     job_title: str,
 ) -> dict:
     now = datetime.now().replace(second=0, microsecond=0)
-    if interview_testing_mode():
-        start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    else:
-        start_date = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
     end_date = start_date + timedelta(days=6)
     raw_days = generate_available_days(start_date, days=7)
     booked = _booked_days(db, interview.job_id, exclude_interview_id=interview.interview_id)

@@ -2,6 +2,7 @@
 Interview API routes for candidates and recruiters.
 """
 import logging
+import re
 import uuid
 import json
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
@@ -45,6 +46,61 @@ router = APIRouter(prefix="/interviews", tags=["interviews"])
 logger = logging.getLogger(__name__)
 
 
+def _summary_looks_french(summary: str) -> bool:
+    """Detect legacy French reports without matching English words like 'candidate'."""
+    if not summary or not summary.strip():
+        return False
+    french_patterns = (
+        r"\bLe candidat\b",
+        r"\bLa candidate\b",
+        r"\bcompétences\b",
+        r"\bentretien\b",
+        r"travail d['']équipe",
+        r"\brecommandé\b",
+        r"\bpoints forts\b",
+    )
+    hits = sum(1 for pattern in french_patterns if re.search(pattern, summary, re.I))
+    return hits >= 2
+
+
+def _build_candidate_interview_detail(db: Session, interview: Interview) -> InterviewCandidateDetail:
+    messages = []
+    if interview.status in (InterviewStatus.IN_PROGRESS, InterviewStatus.COMPLETED):
+        rows = (
+            db.query(InterviewMessage)
+            .filter(InterviewMessage.interview_id == interview.interview_id)
+            .order_by(InterviewMessage.turn_number.asc())
+            .all()
+        )
+        messages = [
+            InterviewMessageItem(
+                role=r.role,
+                content=r.content,
+                audio_url=r.audio_url,
+                turn_number=r.turn_number,
+            )
+            for r in rows
+        ]
+
+    return InterviewCandidateDetail(
+        interview_id=interview.interview_id,
+        application_id=interview.application_id,
+        job_id=interview.job_id,
+        language=interview.language,
+        status=interview.status.value,
+        scheduled_at=interview.scheduled_at,
+        meeting_link=interview.meeting_link,
+        candidate_response=interview.candidate_response,
+        candidate_response_reason=interview.candidate_response_reason,
+        candidate_responded_at=interview.candidate_responded_at,
+        auto_scheduled=interview.auto_scheduled,
+        candidate_availability_comment=interview.candidate_availability_comment,
+        phase=interview.phase.value if interview.phase else None,
+        turn_count=interview.turn_count,
+        messages=messages,
+    )
+
+
 # ==================== CANDIDATE ENDPOINTS ====================
 
 @router.get("/candidate/my-interviews", response_model=list[InterviewListItem])
@@ -54,6 +110,10 @@ def get_candidate_interviews(
 ):
     """Get all interviews for the logged-in candidate."""
     try:
+        from services.job_closing_service import sync_job_closings
+
+        sync_job_closings(db)
+
         candidate = db.query(Candidate).filter(Candidate.user_id == current_user.user_id).first()
         if not candidate:
             return []
@@ -307,17 +367,9 @@ def get_interview_scores(
             detail="Results are available after the interview is completed",
         )
 
-    french_markers = (
-        "Le ",
-        "La ",
-        "candidat",
-        "compét",
-        "entretien",
-        "travail d'équipe",
-        "recommand",
-    )
-    if report and report.summary and any(marker in report.summary for marker in french_markers):
-        interview_service = get_interview_service()
+    interview_service = get_interview_service()
+
+    if report and report.summary and _summary_looks_french(report.summary):
         interview_service.generate_report(db, interview_id, force=True)
         report = (
             db.query(InterviewReport)
@@ -327,7 +379,7 @@ def get_interview_scores(
 
     if not report and interview.status == InterviewStatus.COMPLETED:
         ended_early = bool((interview.session_state or {}).get("ended_early"))
-        get_interview_service().ensure_interview_report(
+        interview_service._generate_fallback_report(
             db, interview_id, ended_early=ended_early
         )
         report = (
@@ -373,7 +425,7 @@ def get_available_time_slots(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.CANDIDATE))
 ):
-    """Get available interview days (next 7 days, one slot per day)."""
+    """Get available interview days (7 days including today, one slot per day)."""
     candidate = db.query(Candidate).filter(Candidate.user_id == current_user.user_id).first()
     if not candidate:
         raise HTTPException(status_code=403, detail="Unauthorized")
@@ -543,41 +595,7 @@ def get_candidate_interview_detail(
     if not candidate or candidate.candidate_id != interview.candidate_id:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
-    messages = []
-    if interview.status in (InterviewStatus.IN_PROGRESS, InterviewStatus.COMPLETED):
-        rows = (
-            db.query(InterviewMessage)
-            .filter(InterviewMessage.interview_id == interview_id)
-            .order_by(InterviewMessage.turn_number.asc())
-            .all()
-        )
-        messages = [
-            InterviewMessageItem(
-                role=r.role,
-                content=r.content,
-                audio_url=r.audio_url,
-                turn_number=r.turn_number,
-            )
-            for r in rows
-        ]
-
-    return InterviewCandidateDetail(
-        interview_id=interview.interview_id,
-        application_id=interview.application_id,
-        job_id=interview.job_id,
-        language=interview.language,
-        status=interview.status.value,
-        scheduled_at=interview.scheduled_at,
-        meeting_link=interview.meeting_link,
-        candidate_response=interview.candidate_response,
-        candidate_response_reason=interview.candidate_response_reason,
-        candidate_responded_at=interview.candidate_responded_at,
-        auto_scheduled=interview.auto_scheduled,
-        candidate_availability_comment=interview.candidate_availability_comment,
-        phase=interview.phase.value if interview.phase else None,
-        turn_count=interview.turn_count,
-        messages=messages,
-    )
+    return _build_candidate_interview_detail(db, interview)
 
 
 @router.post("/candidate/{interview_id}/respond")

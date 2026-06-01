@@ -221,6 +221,10 @@ async def database_unavailable(_request: Request, _exc: OperationalError):
 os.makedirs("interview_media", exist_ok=True)
 app.mount("/media", StaticFiles(directory="interview_media"), name="media")
 
+from services.cv_storage import ensure_cv_dirs
+
+ensure_cv_dirs()
+
 # Include routers
 app.include_router(auth_router)
 app.include_router(super_admin_router)
