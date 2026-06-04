@@ -1,9 +1,6 @@
 import axios from "axios"
 
-// API URL is chosen at BUILD time (Vite):
-//   • Local:  frontend/.env.local  →  VITE_API_URL=http://localhost:8000
-//   • Vercel: Project Settings → Environment Variables → VITE_API_URL=https://your-backend-url
-// Fallback below is ONLY when VITE_API_URL is missing (local dev convenience).
+// Vercel: set VITE_API_URL to your ngrok HTTPS URL (Settings → Environment Variables → redeploy)
 export const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:8000"
 

@@ -1,4 +1,3 @@
-from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 from pathlib import Path
@@ -16,7 +15,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     APP_NAME: str = "AI Recruitment Platform"
-    DEBUG: bool = False
+    DEBUG: bool = True
     FRONTEND_URL: str = "http://localhost:5173"
     
     # 3. Embedding config (multilingual model improves FR CV vs EN job matching)
@@ -45,17 +44,9 @@ class Settings(BaseSettings):
     RAG_CHUNK_OVERLAP: int = 200
     RAG_COLLECTION_PREFIX: str = "recruitment"
 
-    # Celery (defaults to REDIS_URL when not set — e.g. Render + Upstash)
-    CELERY_BROKER_URL: Optional[str] = None
-    CELERY_RESULT_BACKEND: Optional[str] = None
-
-    @model_validator(mode="after")
-    def _default_celery_from_redis(self):
-        if not self.CELERY_BROKER_URL:
-            object.__setattr__(self, "CELERY_BROKER_URL", self.REDIS_URL)
-        if not self.CELERY_RESULT_BACKEND:
-            object.__setattr__(self, "CELERY_RESULT_BACKEND", self.REDIS_URL)
-        return self
+    # Celery async task settings
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
 
     # Email / SMTP (optional)
     SMTP_HOST: Optional[str] = None
