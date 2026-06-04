@@ -14,6 +14,10 @@ alembic
 python-dotenv
 python-multipart
 
+# Dev / testing (IntelliJ, pytest)
+pytest
+httpx
+
 # ============================================
 # CV PROCESSING & NER
 # ============================================
