@@ -1,7 +1,11 @@
 import axios from "axios"
 
+// API URL is chosen at BUILD time (Vite):
+//   • Local:  frontend/.env.local  →  VITE_API_URL=http://localhost:8000
+//   • Vercel: Project Settings → Environment Variables → VITE_API_URL=https://your-backend-url
+// Fallback below is ONLY when VITE_API_URL is missing (local dev convenience).
 export const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "https://difficult-finisher-neglector.ngrok-free.dev"
+  import.meta.env.VITE_API_URL || "http://localhost:8000"
 
 // Applied to all axios calls (API instance, PublicAPI, and standalone axios.get/post)
 axios.defaults.headers.common["ngrok-skip-browser-warning"] = "69420"

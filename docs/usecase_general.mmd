@@ -1,0 +1,88 @@
+%% TalentOs — General use case diagram (include / extend)
+%% Preview: https://mermaid.live  (requires Mermaid 11+ usecaseDiagram)
+
+usecaseDiagram
+    direction LR
+
+    actor Candidate
+    actor Recruiter
+    actor HiringManager as "Hiring Manager"
+    actor Administrator
+    actor SuperAdmin as "Super Administrator"
+    actor AISystem as "AI System"
+
+    rectangle TalentOs {
+        usecase UC_AUTH as "Authenticate"
+        usecase UC_REG as "Register Organization"
+        usecase UC_BROWSE as "Browse Job Offers"
+        usecase UC_SIGNUP as "Sign Up with CV"
+        usecase UC_APPLY as "Apply to Job"
+        usecase UC_TRACK as "Track Applications"
+        usecase UC_SCHED as "Schedule Interview"
+        usecase UC_INTERVIEW as "Attend AI Interview"
+        usecase UC_RESULTS as "View Results"
+        usecase UC_NEED as "Submit Requirement"
+        usecase UC_PUBLISH as "Publish Job"
+        usecase UC_PIPELINE as "Manage Pipeline"
+        usecase UC_RAG as "RAG Assistant"
+        usecase UC_DECIDE as "Final Selection"
+        usecase UC_STAFF as "Invite Staff"
+        usecase UC_USERS as "Manage Users"
+        usecase UC_LOGS as "Audit Logs"
+        usecase UC_TENANTS as "Manage Tenants"
+        usecase UC_OCR as "OCR"
+        usecase UC_NER as "Parse CV"
+        usecase UC_MATCH as "Semantic Match"
+        usecase UC_REPORT as "Interview Report"
+        usecase UC_ORCH as "Workflow Orchestration"
+        usecase UC_RETRIEVE as "RAG Retrieve"
+    }
+
+    Candidate --> UC_BROWSE
+    Candidate --> UC_SIGNUP
+    Candidate --> UC_APPLY
+    Candidate --> UC_TRACK
+    Candidate --> UC_SCHED
+    Candidate --> UC_INTERVIEW
+    Candidate --> UC_RESULTS
+
+    HiringManager --> UC_NEED
+    HiringManager --> UC_DECIDE
+    HiringManager --> UC_RAG
+
+    Recruiter --> UC_PUBLISH
+    Recruiter --> UC_PIPELINE
+    Recruiter --> UC_RAG
+
+    Administrator --> UC_REG
+    Administrator --> UC_STAFF
+    Administrator --> UC_USERS
+    Administrator --> UC_LOGS
+
+    SuperAdmin --> UC_TENANTS
+
+    AISystem --> UC_OCR
+    AISystem --> UC_NER
+    AISystem --> UC_MATCH
+    AISystem --> UC_REPORT
+    AISystem --> UC_ORCH
+    AISystem --> UC_RETRIEVE
+
+    UC_APPLY ..> UC_AUTH : include
+    UC_INTERVIEW ..> UC_AUTH : include
+    UC_PIPELINE ..> UC_AUTH : include
+    UC_DECIDE ..> UC_AUTH : include
+    UC_RAG ..> UC_AUTH : include
+
+    UC_SIGNUP ..> UC_OCR : include
+    UC_OCR ..> UC_NER : include
+    UC_APPLY ..> UC_MATCH : include
+    UC_PIPELINE ..> UC_MATCH : include
+    UC_INTERVIEW ..> UC_REPORT : include
+    UC_RAG ..> UC_RETRIEVE : include
+
+    UC_SCHED <.. UC_INTERVIEW : extend
+    UC_DECIDE <.. UC_PIPELINE : extend
+    UC_PUBLISH <.. UC_NEED : extend
+    UC_SIGNUP <.. UC_APPLY : extend
+    UC_ORCH <.. UC_PIPELINE : extend

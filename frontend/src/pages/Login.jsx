@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { flushSync } from "react-dom"
 import { useNavigate, useLocation } from "react-router-dom"
-import { login as loginApi, getMe, applyToJob } from "../api/authApi"
+import { login as loginApi, getMe, applyToJob, API_BASE_URL } from "../api/authApi"
 import { useAuth } from "../context/AuthContext"
 import { useLanguage } from "../context/LanguageContext"
 
@@ -51,11 +51,21 @@ export default function Login() {
       }
     } catch (err) {
       if (!err.response) {
-        setError(
-          err.code === "ECONNABORTED"
-            ? "Server took too long to respond. Check that the backend is running on port 8000."
-            : "Cannot reach the server. Start the backend (uvicorn main:app --port 8000) and try again."
-        )
+        const api = API_BASE_URL
+        const localhostOnWeb =
+          import.meta.env.PROD &&
+          /localhost|127\.0\.0\.1/.test(api)
+        if (localhostOnWeb) {
+          setError(
+            `This site cannot call ${api} from the browser. On Vercel: Settings → Environment Variables → VITE_API_URL = your ngrok HTTPS URL, then redeploy.`
+          )
+        } else if (err.code === "ECONNABORTED") {
+          setError(`Timeout contacting ${api}. Check uvicorn on port 8000 and ngrok if you use it.`)
+        } else {
+          setError(
+            `Cannot reach ${api}. Keep uvicorn running; if using Vercel, also run ngrok http 8000 and set VITE_API_URL to that URL.`
+          )
+        }
       } else {
         const detail = err.response?.data?.detail
         setError(typeof detail === "string" ? detail : "Login failed")
@@ -125,6 +135,9 @@ export default function Login() {
           </h1>
           <p style={{ color:"#9ca3af", fontSize:"14px" }}>
             {t.signInAccount}
+          </p>
+          <p style={{ color:"#d1d5db", fontSize:"11px", marginTop:"8px", wordBreak:"break-all" }}>
+            API: {API_BASE_URL}
           </p>
         </div>
 
