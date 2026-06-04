@@ -1,6 +1,10 @@
 import axios from "axios"
 
-export const API_BASE_URL = "https://difficult-finisher-neglector.ngrok-free.dev"
+export const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "https://difficult-finisher-neglector.ngrok-free.dev"
+
+// Applied to all axios calls (API instance, PublicAPI, and standalone axios.get/post)
+axios.defaults.headers.common["ngrok-skip-browser-warning"] = "69420"
 
 const API = axios.create({
   baseURL: API_BASE_URL,
@@ -10,6 +14,7 @@ const API = axios.create({
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem("access_token")
   if (token) config.headers.Authorization = `Bearer ${token}`
+  config.headers["ngrok-skip-browser-warning"] = "69420"
   return config
 })
 
@@ -120,6 +125,10 @@ export const updateInterviewLanguage = (interviewId, data) => API.patch(`/interv
 
 // Public interview scheduling (email link, no login)
 const PublicAPI = axios.create({ baseURL: API_BASE_URL })
+PublicAPI.interceptors.request.use((config) => {
+  config.headers["ngrok-skip-browser-warning"] = "69420"
+  return config
+})
 export const getPublicInterviewSchedule = (token) =>
   PublicAPI.get("/public/interview/schedule", { params: { token } })
 export const submitPublicInterviewSchedule = (token, data) =>
