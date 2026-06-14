@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     APP_NAME: str = "AI Recruitment Platform"
     DEBUG: bool = True
-    FRONTEND_URL: str = "http://localhost:5173"
+    FRONTEND_URL: str = "https://pfe-recrutement-ia.vercel.app"
     
     # 3. Embedding config (multilingual model improves FR CV vs EN job matching)
     EMBEDDING_MODEL: str = "paraphrase-multilingual-MiniLM-L12-v2"
