@@ -331,16 +331,16 @@ export default function Landing() {
         <div style={{ width:60, height:3, background:"linear-gradient(135deg,#7B5AC8,#9683EC)", margin:"0 auto 48px auto" }}/>
         <div style={{ display:"flex", justifyContent:"center", gap:"60px", flexWrap:"wrap" }}>
           {[
-            { icon:"📧", label:t.contactEmail, value:"contact@talentos.tn" },
-            { icon:"📞", label:t.contactPhone, value:"+216 XX XXX XXX" },
-            { icon:"📍", label:t.contactLocation, value:"Tunisia, North Africa" },
+            { src:"/landing-page-emojis/email.svg", alt:t.contactEmail, label:t.contactEmail, value:"contact@talentos.tn" },
+            { src:"/landing-page-emojis/phone.svg", alt:t.contactPhone, label:t.contactPhone, value:"+216 XX XXX XXX" },
+            { src:"/landing-page-emojis/location.svg", alt:t.contactLocation, label:t.contactLocation, value:"Tunisia, North Africa" },
           ].map((c, i) => (
             <div key={i} className="card-hover" style={{
               background:"white", borderRadius:"16px", padding:"32px 40px",
               boxShadow:"0 4px 24px rgba(0,0,0,0.07)",
               border:"1px solid #f3f4f6", minWidth:"180px"
             }}>
-              <div style={{ fontSize:"40px", marginBottom:"12px" }}>{c.icon}</div>
+              <img src={c.src} alt={c.alt} style={{ width:"64px", height:"64px", objectFit:"contain", margin:"0 auto 12px auto", display:"block" }} />
               <p style={{ fontWeight:700, color:"#111827", marginBottom:"4px", fontSize:"15px" }}>{c.label}</p>
               <p style={{ color:"#6b7280", fontSize:"14px" }}>{c.value}</p>
             </div>
