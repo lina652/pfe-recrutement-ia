@@ -1,0 +1,817 @@
+[
+  {
+    "module": "ocr",
+    "samples": 4,
+    "mean_cer_pct": 1.31,
+    "mean_wer_pct": 8.18,
+    "coverage_rate_pct": 100.0,
+    "rows": [
+      {
+        "id": "CV1",
+        "name": "cv_digital_en",
+        "type": "Digital PDF",
+        "language": "English",
+        "method": "PyMuPDF",
+        "source": "simulated",
+        "cer": 0.0,
+        "wer": 0.0,
+        "char_count": 690,
+        "coverage_ok": true
+      },
+      {
+        "id": "CV2",
+        "name": "cv_digital_fr",
+        "type": "Digital PDF",
+        "language": "French",
+        "method": "PyMuPDF",
+        "source": "simulated",
+        "cer": 0.0,
+        "wer": 0.0,
+        "char_count": 585,
+        "coverage_ok": true
+      },
+      {
+        "id": "CV3",
+        "name": "cv_scanned_en",
+        "type": "Scanned PDF",
+        "language": "English",
+        "method": "PaddleOCR",
+        "source": "simulated",
+        "cer": 0.0177,
+        "wer": 0.0909,
+        "char_count": 654,
+        "coverage_ok": true
+      },
+      {
+        "id": "CV4",
+        "name": "cv_scanned_fr",
+        "type": "Scanned PDF",
+        "language": "French",
+        "method": "PaddleOCR",
+        "source": "simulated",
+        "cer": 0.0345,
+        "wer": 0.2361,
+        "char_count": 545,
+        "coverage_ok": true
+      }
+    ],
+    "plots": [
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\ocr_error_rates.png",
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\ocr_extraction_methods.png"
+    ],
+    "interpretation": "CER/WER measure how close extracted text is to human-annotated ground truth. Digital PDFs should use PyMuPDF (near-zero error). Scanned CVs rely on PaddleOCR and tolerate higher error; coverage requires at least 30 characters."
+  },
+  {
+    "module": "ner",
+    "mode": "heuristic_offline",
+    "mean_f1": 0.735,
+    "cases": [
+      {
+        "case": "cv_digital_en",
+        "mode": "heuristic_offline",
+        "avg_f1": 0.818,
+        "fields": {
+          "name": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "email": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "phone": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "technical_skills": {
+            "precision": 0.833,
+            "recall": 1.0,
+            "f1": 0.909
+          },
+          "languages": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "education_present": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          }
+        }
+      },
+      {
+        "case": "cv_digital_fr",
+        "mode": "heuristic_offline",
+        "avg_f1": 0.652,
+        "fields": {
+          "name": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "email": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "phone": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "technical_skills": {
+            "precision": 0.833,
+            "recall": 1.0,
+            "f1": 0.909
+          },
+          "languages": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          },
+          "education_present": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          }
+        }
+      },
+      {
+        "case": "cv_scanned_en",
+        "mode": "heuristic_offline",
+        "avg_f1": 0.833,
+        "fields": {
+          "name": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "email": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "phone": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "technical_skills": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "languages": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "education_present": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          }
+        }
+      },
+      {
+        "case": "cv_scanned_fr",
+        "mode": "heuristic_offline",
+        "avg_f1": 0.639,
+        "fields": {
+          "name": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "email": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "phone": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "technical_skills": {
+            "precision": 0.833,
+            "recall": 0.833,
+            "f1": 0.833
+          },
+          "languages": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          },
+          "education_present": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          }
+        }
+      }
+    ],
+    "plots": [
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\ner_field_f1.png",
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\ner_f1_heatmap.png"
+    ],
+    "interpretation": "NER evaluation compares structured JSON fields against annotated ground truth. Name/contact use exact match; skills and languages use set-F1. Use --live to evaluate the Groq llama-3.3-70b parser; offline mode uses a regex baseline."
+  },
+  {
+    "module": "semantic_matching",
+    "skill_threshold": 0.42,
+    "score_mae_pct": 22.02,
+    "classification_accuracy_pct": 25.0,
+    "spearman_correlation": 0.8,
+    "rows": [
+      {
+        "candidate": "Lina Ben Salah",
+        "expected_pct": 38.3,
+        "actual_pct": 48.4,
+        "expected_class": "LOW",
+        "actual_class": "LOW",
+        "class_correct": true,
+        "category_scores": {
+          "skills": {
+            "score": 0.106,
+            "weight": 2.0
+          },
+          "education": {
+            "score": 1.0,
+            "weight": 1.5
+          },
+          "experience": {
+            "score": 0.667,
+            "weight": 1.5
+          },
+          "languages": {
+            "score": 1.0,
+            "weight": 1.0
+          },
+          "soft_skills": {
+            "score": 0.483,
+            "weight": 1.5
+          },
+          "certifications": {
+            "score": 0.0,
+            "weight": 1.0
+          },
+          "profile_fit": {
+            "score": 0.268,
+            "weight": 1.5
+          }
+        },
+        "details": {
+          "skills": {
+            "matched": [
+              {
+                "required": "SIEM",
+                "found": "Canva",
+                "score": 0.636
+              }
+            ],
+            "missing": [
+              "Python",
+              "Network Security",
+              "Penetration Testing",
+              "Incident Response",
+              "Linux"
+            ]
+          },
+          "education": {
+            "status": "✅ Degree matches",
+            "found": "Licence"
+          },
+          "experience": {
+            "years_found": 2.0,
+            "years_required": 3
+          },
+          "languages": {
+            "matched": [
+              "english",
+              "english"
+            ],
+            "missing": []
+          },
+          "soft_skills": {
+            "matched": [
+              {
+                "required": "Analytical thinking",
+                "found": "Creativity",
+                "score": 0.448
+              },
+              {
+                "required": "Communication",
+                "found": "Communication",
+                "score": 1.0
+              }
+            ],
+            "missing": [
+              "Problem solving"
+            ]
+          },
+          "certifications": {
+            "matched": [],
+            "missing": [
+              "CEH",
+              "Security+",
+              "CISSP"
+            ]
+          },
+          "profile_fit": {
+            "similarity": 0.268
+          }
+        }
+      },
+      {
+        "candidate": "Moucharaph Oke",
+        "expected_pct": 32.8,
+        "actual_pct": 52.1,
+        "expected_class": "LOW",
+        "actual_class": "MEDIUM",
+        "class_correct": false,
+        "category_scores": {
+          "skills": {
+            "score": 0.198,
+            "weight": 2.0
+          },
+          "education": {
+            "score": 1.0,
+            "weight": 1.5
+          },
+          "experience": {
+            "score": 1.0,
+            "weight": 1.5
+          },
+          "languages": {
+            "score": 1.0,
+            "weight": 1.0
+          },
+          "soft_skills": {
+            "score": 0.167,
+            "weight": 1.5
+          },
+          "certifications": {
+            "score": 0.0,
+            "weight": 1.0
+          },
+          "profile_fit": {
+            "score": 0.379,
+            "weight": 1.5
+          }
+        },
+        "details": {
+          "skills": {
+            "matched": [
+              {
+                "required": "SIEM",
+                "found": "Git",
+                "score": 0.627
+              },
+              {
+                "required": "Incident Response",
+                "found": "React",
+                "score": 0.561
+              }
+            ],
+            "missing": [
+              "Python",
+              "Network Security",
+              "Penetration Testing",
+              "Linux"
+            ]
+          },
+          "education": {
+            "status": "✅ Degree matches",
+            "found": "Licence"
+          },
+          "experience": {
+            "years_found": 3.0,
+            "years_required": 3
+          },
+          "languages": {
+            "matched": [
+              "english",
+              "english"
+            ],
+            "missing": []
+          },
+          "soft_skills": {
+            "matched": [
+              {
+                "required": "Communication",
+                "found": "Git",
+                "score": 0.501
+              }
+            ],
+            "missing": [
+              "Analytical thinking",
+              "Problem solving"
+            ]
+          },
+          "certifications": {
+            "matched": [],
+            "missing": [
+              "CEH",
+              "Security+",
+              "CISSP"
+            ]
+          },
+          "profile_fit": {
+            "similarity": 0.379
+          }
+        }
+      },
+      {
+        "candidate": "Chloe O'Brian",
+        "expected_pct": 51.5,
+        "actual_pct": 91.1,
+        "expected_class": "MEDIUM",
+        "actual_class": "TOP",
+        "class_correct": false,
+        "category_scores": {
+          "skills": {
+            "score": 1.0,
+            "weight": 2.0
+          },
+          "education": {
+            "score": 1.0,
+            "weight": 1.5
+          },
+          "experience": {
+            "score": 1.0,
+            "weight": 1.5
+          },
+          "languages": {
+            "score": 1.0,
+            "weight": 1.0
+          },
+          "soft_skills": {
+            "score": 1.0,
+            "weight": 1.5
+          },
+          "certifications": {
+            "score": 0.729,
+            "weight": 1.0
+          },
+          "profile_fit": {
+            "score": 0.588,
+            "weight": 1.5
+          }
+        },
+        "details": {
+          "skills": {
+            "matched": [
+              {
+                "required": "Python",
+                "found": "Python",
+                "score": 1.0
+              },
+              {
+                "required": "Network Security",
+                "found": "Network Security",
+                "score": 1.0
+              },
+              {
+                "required": "SIEM",
+                "found": "SIEM",
+                "score": 1.0
+              },
+              {
+                "required": "Penetration Testing",
+                "found": "Penetration Testing",
+                "score": 1.0
+              },
+              {
+                "required": "Incident Response",
+                "found": "Incident Response",
+                "score": 1.0
+              },
+              {
+                "required": "Linux",
+                "found": "Linux",
+                "score": 1.0
+              }
+            ],
+            "missing": []
+          },
+          "education": {
+            "status": "✅ Degree matches",
+            "found": "Bachelor"
+          },
+          "experience": {
+            "years_found": 4.0,
+            "years_required": 3
+          },
+          "languages": {
+            "matched": [
+              "english",
+              "english"
+            ],
+            "missing": []
+          },
+          "soft_skills": {
+            "matched": [
+              {
+                "required": "Analytical thinking",
+                "found": "Analytical thinking",
+                "score": 1.0
+              },
+              {
+                "required": "Communication",
+                "found": "Communication",
+                "score": 1.0
+              },
+              {
+                "required": "Problem solving",
+                "found": "Problem solving",
+                "score": 1.0
+              }
+            ],
+            "missing": []
+          },
+          "certifications": {
+            "matched": [
+              {
+                "required": "CEH",
+                "found": "CEH",
+                "score": 1.0
+              },
+              {
+                "required": "Security+",
+                "found": "CompTIA Security+",
+                "score": 0.75
+              },
+              {
+                "required": "CISSP",
+                "found": "CEH",
+                "score": 0.436
+              }
+            ],
+            "missing": []
+          },
+          "profile_fit": {
+            "similarity": 0.588
+          }
+        }
+      },
+      {
+        "candidate": "Amelia Gonzalez Florida",
+        "expected_pct": 38.9,
+        "actual_pct": 58.0,
+        "expected_class": "LOW",
+        "actual_class": "MEDIUM",
+        "class_correct": false,
+        "category_scores": {
+          "skills": {
+            "score": 0.253,
+            "weight": 2.0
+          },
+          "education": {
+            "score": 1.0,
+            "weight": 1.5
+          },
+          "experience": {
+            "score": 0.667,
+            "weight": 1.5
+          },
+          "languages": {
+            "score": 1.0,
+            "weight": 1.0
+          },
+          "soft_skills": {
+            "score": 0.82,
+            "weight": 1.5
+          },
+          "certifications": {
+            "score": 0.0,
+            "weight": 1.0
+          },
+          "profile_fit": {
+            "score": 0.375,
+            "weight": 1.5
+          }
+        },
+        "details": {
+          "skills": {
+            "matched": [
+              {
+                "required": "Python",
+                "found": "Python",
+                "score": 1.0
+              },
+              {
+                "required": "SIEM",
+                "found": "Communication",
+                "score": 0.517
+              }
+            ],
+            "missing": [
+              "Network Security",
+              "Penetration Testing",
+              "Incident Response",
+              "Linux"
+            ]
+          },
+          "education": {
+            "status": "✅ Degree matches",
+            "found": "Bachelor"
+          },
+          "experience": {
+            "years_found": 2.0,
+            "years_required": 3
+          },
+          "languages": {
+            "matched": [
+              "english",
+              "english"
+            ],
+            "missing": []
+          },
+          "soft_skills": {
+            "matched": [
+              {
+                "required": "Analytical thinking",
+                "found": "Problem solving",
+                "score": 0.46
+              },
+              {
+                "required": "Communication",
+                "found": "Communication",
+                "score": 1.0
+              },
+              {
+                "required": "Problem solving",
+                "found": "Problem solving",
+                "score": 1.0
+              }
+            ],
+            "missing": []
+          },
+          "certifications": {
+            "matched": [],
+            "missing": [
+              "CEH",
+              "Security+",
+              "CISSP"
+            ]
+          },
+          "profile_fit": {
+            "similarity": 0.375
+          }
+        }
+      }
+    ],
+    "plots": [
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\matching_scores.png",
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\matching_category_radar.png",
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\matching_classification.png"
+    ],
+    "interpretation": "Semantic matching combines weighted category scores (skills, education, experience, languages, soft skills, certifications, profile fit). Skills need cosine similarity ≥ 0.42. Scores ≥75% are TOP, ≥50% MEDIUM. Spearman correlation checks whether ranking follows human relevance labels."
+  },
+  {
+    "module": "rag",
+    "mean_retrieval_recall_pct": 91.7,
+    "live_llm": false,
+    "rows": [
+      {
+        "id": "rag_q1",
+        "scenario": "no_candidates",
+        "retrieval_recall": 1.0,
+        "context_chars": 232,
+        "faithfulness": null,
+        "answer_preview": ""
+      },
+      {
+        "id": "rag_q2",
+        "scenario": "ranking",
+        "retrieval_recall": 0.75,
+        "context_chars": 514,
+        "faithfulness": null,
+        "answer_preview": ""
+      },
+      {
+        "id": "rag_q3",
+        "scenario": "pending_interview",
+        "retrieval_recall": 1.0,
+        "context_chars": 189,
+        "faithfulness": null,
+        "answer_preview": ""
+      }
+    ],
+    "plots": [
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\rag_retrieval_faithfulness.png",
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\rag_context_size.png"
+    ],
+    "interpretation": "RAG evaluation first checks whether retrieved context contains expected facts (recall). With --live, the Groq LLM answer is scored for groundedness against those facts. ≤20 candidates use full-context retrieval; larger pools use dynamic k vector search."
+  },
+  {
+    "module": "ai_interview_bot",
+    "overall_score_mae": 2.72,
+    "recommendation_accuracy_pct": 50.0,
+    "scenarios": [
+      {
+        "id": "bot_s1",
+        "label": "Strong technical candidate",
+        "overall_mae": 6.0,
+        "communication_mae": 0.7999999999999998,
+        "technical_mae": 1.7999999999999998,
+        "motivation_mae": 0.7999999999999998,
+        "predicted": {
+          "overall_score": 72.0,
+          "communication_score": 6.7,
+          "technical_score": 6.7,
+          "motivation_score": 6.2,
+          "recommendation": "maybe"
+        },
+        "expert": {
+          "overall_score": 78.0,
+          "communication_score": 7.5,
+          "technical_score": 8.5,
+          "motivation_score": 7.0,
+          "recommendation": "hire"
+        },
+        "recommendation_match": false
+      },
+      {
+        "id": "bot_s2",
+        "label": "Weak / silent candidate",
+        "overall_mae": 2.0,
+        "communication_mae": 0.0,
+        "technical_mae": 0.0,
+        "motivation_mae": 0.0,
+        "predicted": {
+          "overall_score": 20.0,
+          "communication_score": 2.0,
+          "technical_score": 2.0,
+          "motivation_score": 2.0,
+          "recommendation": "no_hire"
+        },
+        "expert": {
+          "overall_score": 22.0,
+          "communication_score": 2.0,
+          "technical_score": 2.0,
+          "motivation_score": 2.0,
+          "recommendation": "no_hire"
+        },
+        "recommendation_match": true
+      },
+      {
+        "id": "bot_s3",
+        "label": "Partial interview (early exit)",
+        "overall_mae": 0.6000000000000014,
+        "communication_mae": 0.20000000000000018,
+        "technical_mae": 0.7000000000000002,
+        "motivation_mae": 0.5,
+        "predicted": {
+          "overall_score": 47.4,
+          "communication_score": 5.2,
+          "technical_score": 5.2,
+          "motivation_score": 5.0,
+          "recommendation": "no_hire"
+        },
+        "expert": {
+          "overall_score": 48.0,
+          "communication_score": 5.0,
+          "technical_score": 4.5,
+          "motivation_score": 5.5,
+          "recommendation": "maybe"
+        },
+        "recommendation_match": false
+      },
+      {
+        "id": "bot_s4",
+        "label": "Average balanced profile",
+        "overall_mae": 2.299999999999997,
+        "communication_mae": 0.5999999999999996,
+        "technical_mae": 0.09999999999999964,
+        "motivation_mae": 0.9000000000000004,
+        "predicted": {
+          "overall_score": 64.3,
+          "communication_score": 5.9,
+          "technical_score": 5.9,
+          "motivation_score": 5.6,
+          "recommendation": "maybe"
+        },
+        "expert": {
+          "overall_score": 62.0,
+          "communication_score": 6.5,
+          "technical_score": 6.0,
+          "motivation_score": 6.5,
+          "recommendation": "maybe"
+        },
+        "recommendation_match": true
+      }
+    ],
+    "plots": [
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\bot_score_scatter.png",
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\bot_dimension_mae.png",
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\bot_recommendation_accuracy.png"
+    ],
+    "interpretation": "The interview bot produces overall (0–100) and dimension scores (0–10) plus a hire recommendation. This benchmark compares heuristic/LLM reports against expert labels on scripted transcripts. Evaluated with rule-based fallback scorer (_build_fallback_report_data). Use --live with DB interviews for full Groq LLM reports."
+  }
+]

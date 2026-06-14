@@ -1,0 +1,107 @@
+[
+  {
+    "module": "ai_interview_bot",
+    "overall_score_mae": 2.72,
+    "recommendation_accuracy_pct": 50.0,
+    "scenarios": [
+      {
+        "id": "bot_s1",
+        "label": "Strong technical candidate",
+        "overall_mae": 6.0,
+        "communication_mae": 0.7999999999999998,
+        "technical_mae": 1.7999999999999998,
+        "motivation_mae": 0.7999999999999998,
+        "predicted": {
+          "overall_score": 72.0,
+          "communication_score": 6.7,
+          "technical_score": 6.7,
+          "motivation_score": 6.2,
+          "recommendation": "maybe"
+        },
+        "expert": {
+          "overall_score": 78.0,
+          "communication_score": 7.5,
+          "technical_score": 8.5,
+          "motivation_score": 7.0,
+          "recommendation": "hire"
+        },
+        "recommendation_match": false
+      },
+      {
+        "id": "bot_s2",
+        "label": "Weak / silent candidate",
+        "overall_mae": 2.0,
+        "communication_mae": 0.0,
+        "technical_mae": 0.0,
+        "motivation_mae": 0.0,
+        "predicted": {
+          "overall_score": 20.0,
+          "communication_score": 2.0,
+          "technical_score": 2.0,
+          "motivation_score": 2.0,
+          "recommendation": "no_hire"
+        },
+        "expert": {
+          "overall_score": 22.0,
+          "communication_score": 2.0,
+          "technical_score": 2.0,
+          "motivation_score": 2.0,
+          "recommendation": "no_hire"
+        },
+        "recommendation_match": true
+      },
+      {
+        "id": "bot_s3",
+        "label": "Partial interview (early exit)",
+        "overall_mae": 0.6000000000000014,
+        "communication_mae": 0.20000000000000018,
+        "technical_mae": 0.7000000000000002,
+        "motivation_mae": 0.5,
+        "predicted": {
+          "overall_score": 47.4,
+          "communication_score": 5.2,
+          "technical_score": 5.2,
+          "motivation_score": 5.0,
+          "recommendation": "no_hire"
+        },
+        "expert": {
+          "overall_score": 48.0,
+          "communication_score": 5.0,
+          "technical_score": 4.5,
+          "motivation_score": 5.5,
+          "recommendation": "maybe"
+        },
+        "recommendation_match": false
+      },
+      {
+        "id": "bot_s4",
+        "label": "Average balanced profile",
+        "overall_mae": 2.299999999999997,
+        "communication_mae": 0.5999999999999996,
+        "technical_mae": 0.09999999999999964,
+        "motivation_mae": 0.9000000000000004,
+        "predicted": {
+          "overall_score": 64.3,
+          "communication_score": 5.9,
+          "technical_score": 5.9,
+          "motivation_score": 5.6,
+          "recommendation": "maybe"
+        },
+        "expert": {
+          "overall_score": 62.0,
+          "communication_score": 6.5,
+          "technical_score": 6.0,
+          "motivation_score": 6.5,
+          "recommendation": "maybe"
+        },
+        "recommendation_match": true
+      }
+    ],
+    "plots": [
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\bot_score_scatter.png",
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\bot_dimension_mae.png",
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\bot_recommendation_accuracy.png"
+    ],
+    "interpretation": "The interview bot produces overall (0–100) and dimension scores (0–10) plus a hire recommendation. This benchmark compares heuristic/LLM reports against expert labels on scripted transcripts. Evaluated with rule-based fallback scorer (_build_fallback_report_data). Use --live with DB interviews for full Groq LLM reports."
+  }
+]

@@ -17,6 +17,7 @@ python-multipart
 # Dev / testing (IntelliJ, pytest)
 pytest
 httpx
+matplotlib
 
 # ============================================
 # CV PROCESSING & NER

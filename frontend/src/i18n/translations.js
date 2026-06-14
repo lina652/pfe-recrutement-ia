@@ -2,7 +2,7 @@ const translations = {
   en: {
     // ── Navbar ──
     home: "Home", services: "Services", jobs: "Jobs", contact: "Contact",
-    login: "Login", postJob: "Post a Job", uploadCV: "Upload CV",
+    login: "Login", postJob: "Create Company", uploadCV: "Upload CV",
 
     // ── Hero ──
     hero_sub: "TalentOs.", hero_title1: "We Offer", hero_bold: "AI-Powered",
@@ -144,7 +144,7 @@ const translations = {
 
   fr: {
     home: "Accueil", services: "Services", jobs: "Emplois", contact: "Contact",
-    login: "Connexion", postJob: "Publier une offre", uploadCV: "Déposer CV",
+    login: "Connexion", postJob: "Créer une entreprise", uploadCV: "Déposer CV",
 
     hero_sub: "TalentOs.", hero_title1: "Nous proposons",
     hero_bold: "un recrutement IA", hero_title2: "dès maintenant.",
@@ -272,7 +272,7 @@ const translations = {
 
   ar: {
     home: "الرئيسية", services: "خدماتنا", jobs: "الوظائف", contact: "اتصل بنا",
-    login: "تسجيل الدخول", postJob: "نشر وظيفة", uploadCV: "رفع السيرة الذاتية",
+    login: "تسجيل الدخول", postJob: "إنشاء شركة", uploadCV: "رفع السيرة الذاتية",
 
     hero_sub: "تالنت أوس.", hero_title1: "نحن نقدم",
     hero_bold: "التوظيف بالذكاء الاصطناعي", hero_title2: "الآن.",

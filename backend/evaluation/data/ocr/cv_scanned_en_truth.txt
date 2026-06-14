@@ -1,0 +1,22 @@
+CHLOE O'BRIAN
+Email: chloe.obrian@securemail.com | Phone: +44 7700 900123 | London, UK
+
+CYBERSECURITY ANALYST
+Security professional with 4 years of experience in network security monitoring,
+SIEM operations, penetration testing support, and incident response.
+
+CORE SKILLS
+Python, Network Security, SIEM, Penetration Testing, Incident Response, Linux, Wireshark
+
+EXPERIENCE
+Security Analyst — ShieldNet Ltd (2020–2024)
+Monitored Splunk SIEM alerts, assisted vulnerability assessments, wrote Python playbooks.
+
+CERTIFICATIONS
+CEH, CompTIA Security+
+
+EDUCATION
+BSc Cybersecurity — University of Manchester (2020)
+
+LANGUAGES
+English (Native), French (Professional)

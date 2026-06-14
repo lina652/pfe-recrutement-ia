@@ -1,0 +1,30 @@
+[
+  {
+    "candidate": "Lina Ben Salah",
+    "cv_file": "lina_parsed.json",
+    "expected_score_pct": 38.3,
+    "expected_classification": "LOW",
+    "relevance": 0.2
+  },
+  {
+    "candidate": "Moucharaph Oke",
+    "cv_file": "moucharaph_parsed.json",
+    "expected_score_pct": 32.8,
+    "expected_classification": "LOW",
+    "relevance": 0.15
+  },
+  {
+    "candidate": "Chloe O'Brian",
+    "cv_file": "chloe_parsed.json",
+    "expected_score_pct": 51.5,
+    "expected_classification": "MEDIUM",
+    "relevance": 0.75
+  },
+  {
+    "candidate": "Amelia Gonzalez Florida",
+    "cv_file": "amelia_parsed.json",
+    "expected_score_pct": 38.9,
+    "expected_classification": "LOW",
+    "relevance": 0.25
+  }
+]

@@ -1,0 +1,60 @@
+[
+  {
+    "id": "rag_q1",
+    "scenario": "no_candidates",
+    "question": "Who are the best candidates for this cybersecurity role?",
+    "documents": [
+      {
+        "page_content": "JOB POSTING: Cybersecurity Analyst\nCompany: Tech Corp Tunisia\nDescription: Monitor security events and conduct vulnerability assessments.\nRequired skills: Python, Network Security, SIEM, Penetration Testing, Incident Response, Linux",
+        "metadata": {"type": "job_requirements"}
+      }
+    ],
+    "expected_facts": [],
+    "expect_no_candidate_names": true,
+    "reference_answer": "No candidate profiles are indexed yet for this job."
+  },
+  {
+    "id": "rag_q2",
+    "scenario": "ranking",
+    "question": "Which candidate has the highest CV match score?",
+    "documents": [
+      {
+        "page_content": "JOB POSTING: Cybersecurity Analyst\nRequired skills: Python, Network Security, SIEM",
+        "metadata": {"type": "job_requirements"}
+      },
+      {
+        "page_content": "CANDIDATE: Chloe O'Brian\nEmail: chloe.obrian@securemail.com\nSkills: Python, Network Security, SIEM, Penetration Testing\nSemantic match: 51.5% (MEDIUM)\nInterview status: pending",
+        "metadata": {"type": "candidate_profile", "candidate_id": "c_chloe"}
+      },
+      {
+        "page_content": "CANDIDATE: Lina Ben Salah\nSkills: Excel, Power BI, SQL\nSemantic match: 38.3% (LOW)\nInterview status: not started",
+        "metadata": {"type": "candidate_profile", "candidate_id": "c_lina"}
+      },
+      {
+        "page_content": "CANDIDATE: Amelia Gonzalez Florida\nSkills: Python, SQL, Help Desk\nSemantic match: 38.9% (LOW)\nInterview status: not started",
+        "metadata": {"type": "candidate_profile", "candidate_id": "c_amelia"}
+      }
+    ],
+    "expected_facts": ["Chloe", "51.5", "highest", "match"],
+    "expect_no_candidate_names": false,
+    "reference_answer": "Chloe O'Brian has the highest semantic match at 51.5%."
+  },
+  {
+    "id": "rag_q3",
+    "scenario": "pending_interview",
+    "question": "Can we recommend Chloe O'Brian without the AI interview?",
+    "documents": [
+      {
+        "page_content": "JOB POSTING: Cybersecurity Analyst",
+        "metadata": {"type": "job_requirements"}
+      },
+      {
+        "page_content": "CANDIDATE: Chloe O'Brian\nSemantic match: 51.5% (MEDIUM)\nBot evaluation: pending (interview not completed yet)\nSkills: Python, Network Security, SIEM",
+        "metadata": {"type": "candidate_profile", "candidate_id": "c_chloe"}
+      }
+    ],
+    "expected_facts": ["pending", "interview", "not completed", "51.5"],
+    "expect_no_candidate_names": false,
+    "reference_answer": "Chloe shows a medium CV match but the AI interview is still pending; final recommendation should wait."
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "name": "Lina Ben Salah",
+  "contact": {"email": "lina.bensalah@email.fr", "phone": "+33 6 12 34 56 78", "location": "Paris, France"},
+  "skills": {
+    "technical": ["Excel", "Power BI", "SQL", "Google Analytics", "Canva"],
+    "soft": ["Community management", "Creativity", "Communication"]
+  },
+  "languages": [
+    {"language": "French", "level": "Native"},
+    {"language": "English", "level": "Fluent"}
+  ],
+  "education": [
+    {"school": "Université Paris Cité", "degree": "Licence", "field": "Marketing Digital", "year": "2022"}
+  ],
+  "work_experience": [
+    {"company": "NovaRetail", "role": "Marketing Digital", "duration": "2 years", "description": "Social media campaigns"}
+  ],
+  "certifications": [],
+  "projects": []
+}

@@ -1,0 +1,224 @@
+[
+  {
+    "module": "ocr",
+    "samples": 4,
+    "mean_cer_pct": 1.31,
+    "mean_wer_pct": 8.18,
+    "coverage_rate_pct": 100.0,
+    "rows": [
+      {
+        "id": "CV1",
+        "name": "cv_digital_en",
+        "type": "Digital PDF",
+        "language": "English",
+        "method": "PyMuPDF",
+        "source": "simulated",
+        "cer": 0.0,
+        "wer": 0.0,
+        "char_count": 690,
+        "coverage_ok": true
+      },
+      {
+        "id": "CV2",
+        "name": "cv_digital_fr",
+        "type": "Digital PDF",
+        "language": "French",
+        "method": "PyMuPDF",
+        "source": "simulated",
+        "cer": 0.0,
+        "wer": 0.0,
+        "char_count": 585,
+        "coverage_ok": true
+      },
+      {
+        "id": "CV3",
+        "name": "cv_scanned_en",
+        "type": "Scanned PDF",
+        "language": "English",
+        "method": "PaddleOCR",
+        "source": "simulated",
+        "cer": 0.0177,
+        "wer": 0.0909,
+        "char_count": 654,
+        "coverage_ok": true
+      },
+      {
+        "id": "CV4",
+        "name": "cv_scanned_fr",
+        "type": "Scanned PDF",
+        "language": "French",
+        "method": "PaddleOCR",
+        "source": "simulated",
+        "cer": 0.0345,
+        "wer": 0.2361,
+        "char_count": 545,
+        "coverage_ok": true
+      }
+    ],
+    "plots": [
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\ocr_error_rates.png",
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\ocr_extraction_methods.png"
+    ],
+    "interpretation": "CER/WER measure how close extracted text is to human-annotated ground truth. Digital PDFs should use PyMuPDF (near-zero error). Scanned CVs rely on PaddleOCR and tolerate higher error; coverage requires at least 30 characters."
+  },
+  {
+    "module": "ner",
+    "mode": "heuristic_offline",
+    "mean_f1": 0.735,
+    "cases": [
+      {
+        "case": "cv_digital_en",
+        "mode": "heuristic_offline",
+        "avg_f1": 0.818,
+        "fields": {
+          "name": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "email": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "phone": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "technical_skills": {
+            "precision": 0.833,
+            "recall": 1.0,
+            "f1": 0.909
+          },
+          "languages": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "education_present": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          }
+        }
+      },
+      {
+        "case": "cv_digital_fr",
+        "mode": "heuristic_offline",
+        "avg_f1": 0.652,
+        "fields": {
+          "name": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "email": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "phone": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "technical_skills": {
+            "precision": 0.833,
+            "recall": 1.0,
+            "f1": 0.909
+          },
+          "languages": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          },
+          "education_present": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          }
+        }
+      },
+      {
+        "case": "cv_scanned_en",
+        "mode": "heuristic_offline",
+        "avg_f1": 0.833,
+        "fields": {
+          "name": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "email": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "phone": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "technical_skills": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "languages": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "education_present": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          }
+        }
+      },
+      {
+        "case": "cv_scanned_fr",
+        "mode": "heuristic_offline",
+        "avg_f1": 0.639,
+        "fields": {
+          "name": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "email": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "phone": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "technical_skills": {
+            "precision": 0.833,
+            "recall": 0.833,
+            "f1": 0.833
+          },
+          "languages": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          },
+          "education_present": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0
+          }
+        }
+      }
+    ],
+    "plots": [
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\ner_field_f1.png",
+      "C:\\Users\\LENOVO\\Desktop\\pfe\\AI recruitment\\backend\\evaluation\\results\\ner_f1_heatmap.png"
+    ],
+    "interpretation": "NER evaluation compares structured JSON fields against annotated ground truth. Name/contact use exact match; skills and languages use set-F1. Use --live to evaluate the Groq llama-3.3-70b parser; offline mode uses a regex baseline."
+  }
+]

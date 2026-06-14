@@ -1,0 +1,20 @@
+{
+  "name": "Chloe O'Brian",
+  "contact": {"email": "chloe.obrian@securemail.com", "phone": "+44 7700 900123", "location": "London, UK"},
+  "skills": {
+    "technical": ["Python", "Network Security", "SIEM", "Penetration Testing", "Incident Response", "Linux", "Wireshark"],
+    "soft": ["Analytical thinking", "Communication", "Problem solving"]
+  },
+  "languages": [
+    {"language": "English", "level": "Native"},
+    {"language": "French", "level": "Professional"}
+  ],
+  "education": [
+    {"school": "University of Manchester", "degree": "Bachelor", "field": "Cybersecurity", "year": "2020"}
+  ],
+  "work_experience": [
+    {"company": "ShieldNet Ltd", "role": "Security Analyst", "duration": "4 years", "description": "SIEM monitoring, vulnerability assessments, Python playbooks"}
+  ],
+  "certifications": ["CEH", "CompTIA Security+"],
+  "projects": []
+}

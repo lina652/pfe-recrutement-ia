@@ -1,0 +1,26 @@
+{
+  "name": "Moucharaph Oke",
+  "contact": {
+    "email": "moucharaph.oke@email.fr",
+    "phone": "+33 7 98 76 54 32",
+    "location": "Lyon, France",
+    "linkedin": "",
+    "github": ""
+  },
+  "skills": {
+    "technical": ["JavaScript", "React", "Node.js", "MongoDB", "Git", "Docker"],
+    "soft": ["Teamwork", "Adaptability"]
+  },
+  "languages": [
+    {"language": "French", "level": "Native"},
+    {"language": "English", "level": "Intermediate"}
+  ],
+  "education": [
+    {"school": "Université Claude Bernard Lyon 1", "degree": "Licence", "field": "Informatique", "year": "2021"}
+  ],
+  "work_experience": [
+    {"company": "WebCraft Studio", "role": "Développeur Frontend", "duration": "2021-2024", "description": "React interfaces and payment APIs"}
+  ],
+  "certifications": [],
+  "projects": []
+}

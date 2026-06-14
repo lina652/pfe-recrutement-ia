@@ -45,7 +45,7 @@ export default function Landing() {
           evaluations: data.evaluations_count || 795,
           partners: data.partners_count || 654
         })
-      } catch (err) {
+      } catch {
         setStats({ companies: 1000, programs: 850, evaluations: 795, partners: 654 })
       }
     }
@@ -153,7 +153,7 @@ export default function Landing() {
               onMouseOver={(e) => { e.currentTarget.style.opacity = "0.85" }}
               onMouseOut={(e) => { e.currentTarget.style.opacity = "1" }}
             >
-              {t.postJob}
+              {t.createCompany}
             </button>
           </div>
         </div>
@@ -388,7 +388,7 @@ export default function Landing() {
               {[
                 { label:t.createCompany, path:"/company/signup" },
                 { label:t.adminDashboard, path:"/admin/dashboard" },
-                { label:t.postJob, path:"/recruiter/jobs" },
+                { label:t.createCompany, path:"/recruiter/jobs" },
                 { label:t.login, path:"/login" },
               ].map((l, i) => (
                 <li key={i} onClick={() => navigate(l.path)} style={{ opacity:0.8, fontSize:"13px", marginBottom:"8px", cursor:"pointer" }}

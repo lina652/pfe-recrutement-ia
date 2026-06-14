@@ -1,0 +1,34 @@
+[
+  {
+    "id": "CV1",
+    "name": "cv_digital_en",
+    "type": "Digital PDF",
+    "language": "English",
+    "expected_method": "PyMuPDF",
+    "truth_file": "cv_digital_en_truth.txt"
+  },
+  {
+    "id": "CV2",
+    "name": "cv_digital_fr",
+    "type": "Digital PDF",
+    "language": "French",
+    "expected_method": "PyMuPDF",
+    "truth_file": "cv_digital_fr_truth.txt"
+  },
+  {
+    "id": "CV3",
+    "name": "cv_scanned_en",
+    "type": "Scanned PDF",
+    "language": "English",
+    "expected_method": "PaddleOCR",
+    "truth_file": "cv_scanned_en_truth.txt"
+  },
+  {
+    "id": "CV4",
+    "name": "cv_scanned_fr",
+    "type": "Scanned PDF",
+    "language": "French",
+    "expected_method": "PaddleOCR",
+    "truth_file": "cv_scanned_fr_truth.txt"
+  }
+]

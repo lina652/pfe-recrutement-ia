@@ -323,7 +323,7 @@ export default function Navbar() {
             }}
             onMouseOver={(e) => e.target.style.opacity = 0.85}
             onMouseOut={(e) => e.target.style.opacity = 1}
-          >{t.postJob}</button>
+          >{t.createCompany}</button>
         )}
       </div>
     </nav>

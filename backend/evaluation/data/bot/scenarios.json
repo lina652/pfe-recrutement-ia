@@ -1,0 +1,78 @@
+[
+  {
+    "id": "bot_s1",
+    "label": "Strong technical candidate",
+    "ended_early": false,
+    "expert": {
+      "overall_score": 78.0,
+      "communication_score": 7.5,
+      "technical_score": 8.5,
+      "motivation_score": 7.0,
+      "recommendation": "hire"
+    },
+    "messages": [
+      {"role": "bot", "content": "Tell me about your experience with SIEM tools."},
+      {"role": "candidate", "content": "I operated Splunk daily for 3 years, tuning correlation rules and triaging alerts across 200 endpoints."},
+      {"role": "bot", "content": "How do you approach incident response?"},
+      {"role": "candidate", "content": "I follow a documented playbook: contain, eradicate, recover, then post-incident review with root cause analysis."},
+      {"role": "bot", "content": "Describe a challenging security project."},
+      {"role": "candidate", "content": "I automated phishing triage with Python, reducing analyst workload by 40% while maintaining detection quality."}
+    ]
+  },
+  {
+    "id": "bot_s2",
+    "label": "Weak / silent candidate",
+    "ended_early": true,
+    "expert": {
+      "overall_score": 22.0,
+      "communication_score": 2.0,
+      "technical_score": 2.0,
+      "motivation_score": 2.0,
+      "recommendation": "no_hire"
+    },
+    "messages": [
+      {"role": "bot", "content": "Introduce yourself briefly."},
+      {"role": "candidate", "content": "[silence]"},
+      {"role": "bot", "content": "Can you share one technical skill relevant to cybersecurity?"},
+      {"role": "candidate", "content": "um"}
+    ]
+  },
+  {
+    "id": "bot_s3",
+    "label": "Partial interview (early exit)",
+    "ended_early": true,
+    "expert": {
+      "overall_score": 48.0,
+      "communication_score": 5.0,
+      "technical_score": 4.5,
+      "motivation_score": 5.5,
+      "recommendation": "maybe"
+    },
+    "messages": [
+      {"role": "bot", "content": "Why are you interested in this role?"},
+      {"role": "candidate", "content": "I want to grow in security operations and contribute to proactive threat detection."},
+      {"role": "bot", "content": "What is your experience with Linux hardening?"},
+      {"role": "candidate", "content": "I configured SSH keys, disabled root login, and applied CIS benchmarks on Ubuntu servers in my last internship."}
+    ]
+  },
+  {
+    "id": "bot_s4",
+    "label": "Average balanced profile",
+    "ended_early": false,
+    "expert": {
+      "overall_score": 62.0,
+      "communication_score": 6.5,
+      "technical_score": 6.0,
+      "motivation_score": 6.5,
+      "recommendation": "maybe"
+    },
+    "messages": [
+      {"role": "bot", "content": "How do you stay updated on security threats?"},
+      {"role": "candidate", "content": "I follow CERT advisories, read threat intel blogs, and practice on HackTheBox weekly."},
+      {"role": "bot", "content": "Give an example of teamwork under pressure."},
+      {"role": "candidate", "content": "During a ransomware scare our team split containment and communications; I documented IOCs while others isolated hosts."},
+      {"role": "bot", "content": "Any certifications?"},
+      {"role": "candidate", "content": "I hold Security+ and I am preparing for CEH."}
+    ]
+  }
+]

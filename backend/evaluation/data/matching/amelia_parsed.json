@@ -1,0 +1,20 @@
+{
+  "name": "Amelia Gonzalez Florida",
+  "contact": {"email": "amelia.gonzalez@email.com", "phone": "+1 555 0142", "location": "Miami, FL"},
+  "skills": {
+    "technical": ["Python", "SQL", "Windows Server", "Active Directory", "Office 365"],
+    "soft": ["Communication", "Problem solving"]
+  },
+  "languages": [
+    {"language": "English", "level": "Native"},
+    {"language": "Spanish", "level": "Fluent"}
+  ],
+  "education": [
+    {"school": "Florida State College", "degree": "Bachelor", "field": "Information Technology", "year": "2022"}
+  ],
+  "work_experience": [
+    {"company": "BrightPath Solutions", "role": "Help Desk Technician", "duration": "2 years", "description": "Help desk and basic Python scripting"}
+  ],
+  "certifications": [],
+  "projects": []
+}
