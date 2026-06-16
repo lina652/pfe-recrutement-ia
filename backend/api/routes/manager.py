@@ -130,25 +130,32 @@ def submit_requirements(
     db.commit()
     db.refresh(req)
 
-    # Find the HR user in the same company
-    hr_user = db.query(User).filter(
+    # Notify every active recruiter in the same company
+    hr_users = db.query(User).filter(
         User.company_id == current_user.company_id,
         User.role == UserRole.RECRUITER,
         User.is_active == True
-    ).first()
+    ).all()
 
-    if hr_user:
-        notification = Notification(
-            notification_id=str(uuid.uuid4()),
-            user_id=hr_user.user_id,
-            company_id=current_user.company_id,
-            title="New Job Requirements Submitted",
-            message=f"{current_user.first_name} {current_user.last_name} submitted job requirements for \"{payload.title}\". Please review and approve or reject.",
-            type="REQUIREMENT_SUBMITTED",
-            reference_id=req.request_id,
-            is_read=False
+    if hr_users:
+        manager_name = f"{current_user.first_name} {current_user.last_name}".strip() or current_user.email
+        notification_title = "Requirement Request Submitted"
+        notification_message = (
+            f"{manager_name} submitted a requirement request for \"{payload.title}\". "
+            "Please consult the Requirement Requests section in your dashboard."
         )
-        db.add(notification)
+        for hr_user in hr_users:
+            notification = Notification(
+                notification_id=str(uuid.uuid4()),
+                user_id=hr_user.user_id,
+                company_id=current_user.company_id,
+                title=notification_title,
+                message=notification_message,
+                type="REQUIREMENT_SUBMITTED",
+                reference_id=req.request_id,
+                is_read=False
+            )
+            db.add(notification)
         db.commit()
 
     save_log(

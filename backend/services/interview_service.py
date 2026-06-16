@@ -153,7 +153,7 @@ class InterviewService:
 
             # Generate TTS audio
             audio_path = self.tts.synthesize_sync(opening_question, language)
-            audio_url_frontend = f"http://localhost:8000/media/{Path(audio_path).name}"
+            audio_url_frontend = f"{settings.BACKEND_URL}/media/{Path(audio_path).name}"
             
             # Save opening message
             message = InterviewMessage(
@@ -302,7 +302,7 @@ class InterviewService:
         db.flush()
 
         bot_audio_path = self.tts.synthesize_sync(bot_response, interview.language)
-        bot_audio_url = f"http://localhost:8000/media/{Path(bot_audio_path).name}"
+        bot_audio_url = f"{settings.BACKEND_URL}/media/{Path(bot_audio_path).name}"
 
         interview.turn_count += 1
         bot_signals = {"internal_note": llm_internal_note} if llm_internal_note else {}
@@ -584,7 +584,7 @@ class InterviewService:
                 should_end = True
 
             bot_audio_path = self.tts.synthesize_sync(bot_response, lang)
-            bot_audio_url = f"http://localhost:8000/media/{Path(bot_audio_path).name}"
+            bot_audio_url = f"{settings.BACKEND_URL}/media/{Path(bot_audio_path).name}"
 
             interview.turn_count += 1
             db.add(

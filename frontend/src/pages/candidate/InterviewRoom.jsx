@@ -37,7 +37,7 @@ export default function InterviewRoom() {
   const { user } = useAuth()
   const { t, language } = useLanguage()
   
-  const [stage, setStage] = useState("loading") // loading, invitation, waiting, starting, language-select, recording, complete
+  const [stage, setStage] = useState("loading") // loading, invitation, waiting, starting, recording, complete
   const [tick, setTick] = useState(0)
   const [selectedLanguage, setSelectedLanguage] = useState("en")
   const [isRecording, setIsRecording] = useState(false)
@@ -106,14 +106,10 @@ export default function InterviewRoom() {
 
   useEffect(() => {
     if (stage !== "waiting" || !canStartInterview(interviewDetail?.scheduled_at)) return
-    const lang = interviewLanguage(interviewDetail)
-    if (lang && interviewDetail?.scheduled_at) {
-      setSelectedLanguage(lang)
-      setStage("starting")
-      beginInterviewSession(lang, interviewDetail)
-    } else {
-      setStage("language-select")
-    }
+    const lang = interviewLanguage(interviewDetail) || "en"
+    setSelectedLanguage(lang)
+    setStage("starting")
+    beginInterviewSession(lang, interviewDetail)
   }, [stage, interviewDetail?.scheduled_at, interviewDetail?.language, tick])
 
   // Initialize camera
@@ -304,7 +300,7 @@ export default function InterviewRoom() {
       markSessionClosed()
       endRequestedRef.current = false
       setToast({ type: "error", message: err.response?.data?.detail || "Failed to start interview" })
-      setStage(detail?.messages?.length ? "error" : "language-select")
+      setStage(detail?.messages?.length ? "error" : "error")
       console.error(err)
     } finally {
       setIsProcessing(false)
@@ -334,15 +330,13 @@ export default function InterviewRoom() {
         setStage("error")
         setTimeout(() => navigate("/candidate/interviews"), 2500)
       } else if (data.candidate_response === "ACCEPTED") {
-        const lang = interviewLanguage(data)
-        if (lang) setSelectedLanguage(lang)
+        const lang = interviewLanguage(data) || "en"
+        setSelectedLanguage(lang)
         if (!canStartInterview(data.scheduled_at)) {
           setStage("waiting")
-        } else if (lang && data.scheduled_at) {
+        } else {
           setStage("starting")
           beginInterviewSession(lang, data)
-        } else {
-          setStage("language-select")
         }
       } else {
         setStage("invitation")
@@ -433,18 +427,17 @@ export default function InterviewRoom() {
       if (action === "ACCEPTED") {
         setToast({ type: "success", message: "Invitation accepted" })
         const scheduled = interviewDetail?.scheduled_at
-        const lang = interviewLanguage(interviewDetail)
+        const lang = interviewLanguage(interviewDetail) || "en"
+        setSelectedLanguage(lang)
         if (!canStartInterview(scheduled)) {
           setStage("waiting")
-        } else if (lang && scheduled) {
+        } else {
           setStage("starting")
           beginInterviewSession(lang, {
             ...interviewDetail,
             candidate_response: "ACCEPTED",
             scheduled_at: scheduled,
           })
-        } else {
-          setStage("language-select")
         }
       } else {
         setToast({ type: "success", message: "Invitation refused. Redirecting..." })
@@ -458,28 +451,6 @@ export default function InterviewRoom() {
       console.error(err)
     } finally {
       setIsResponding(false)
-    }
-  }
-
-  const handleLanguageSelect = async (lang) => {
-    if (!canStartInterview(interviewDetail?.scheduled_at)) {
-      setToast({
-        type: "error",
-        message: `Interview available on ${formatInterviewStartLabel(interviewDetail?.scheduled_at)}`,
-      })
-      return
-    }
-    try {
-      setIsProcessing(true)
-      await updateInterviewLanguage(interviewId, { language: lang })
-      setInterviewDetail((prev) => (prev ? { ...prev, language: lang } : prev))
-      setStage("starting")
-      await beginInterviewSession(lang)
-    } catch (err) {
-      setToast({ type: "error", message: err.response?.data?.detail || "Failed to save language" })
-      console.error(err)
-    } finally {
-      setIsProcessing(false)
     }
   }
 
@@ -758,50 +729,6 @@ export default function InterviewRoom() {
           </div>
         )}
 
-        {/* Language — only if not set during day scheduling */}
-        {stage === "language-select" && (
-          <div className="flex items-center justify-center min-h-screen">
-            <div className="page-glass shadow-xl p-8 max-w-md w-full mx-4">
-              <h2 className="text-3xl font-bold text-gray-800 mb-2 text-center">Interview</h2>
-              <p className="text-gray-600 text-center mb-8">
-                Select your preferred interview language
-              </p>
-
-              {interviewDetail?.meeting_link && (
-                <div className="mb-6 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-900 break-all">
-                  Open link: <a href={interviewDetail.meeting_link} className="underline font-semibold" target="_blank" rel="noreferrer">{interviewDetail.meeting_link}</a>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <button
-                  onClick={() => handleLanguageSelect("en")}
-                  disabled={isProcessing}
-                  className="w-full py-4 px-6 rounded-lg font-bold text-lg transition-all
-                    bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg
-                    disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  🇬🇧 English
-                </button>
-
-                <button
-                  onClick={() => handleLanguageSelect("fr")}
-                  disabled={isProcessing}
-                  className="w-full py-4 px-6 rounded-lg font-bold text-lg transition-all
-                    bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg
-                    disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  🇫🇷 Français
-                </button>
-              </div>
-
-              <p className="text-xs text-gray-500 mt-6 text-center">
-                You will be asked several questions about your background and experience.
-                Please speak clearly and take your time answering.
-              </p>
-            </div>
-          </div>
-        )}
 
         {/* Recording Stage */}
         {stage === "recording" && (

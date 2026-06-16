@@ -21,6 +21,7 @@ from models.job_offer import JobOffer
 from models.notification import Notification
 from models.user import User
 from services.mailer import send_email
+from services.shortlist_notification_service import notify_candidate_shortlisted
 logger = logging.getLogger(__name__)
 _pipeline_lock = threading.Lock()
 _pipeline_running: set[str] = set()
@@ -366,6 +367,10 @@ def execute_job_closing(db: Session, job_id: str) -> dict:
 
         app.status = ApplicationStatus.SHORTLISTED
         invited_app_ids.add(app.app_id)
+        
+        # Create shortlist notification
+        notify_candidate_shortlisted(db, application=app, job=job, candidate=candidate)
+        
         _create_interview_invite(db, job, app, candidate, user, available_days)
 
     for app in applications:

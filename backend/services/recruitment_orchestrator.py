@@ -254,6 +254,8 @@ class RecruitmentOrchestrator:
         from database import SessionLocal
         from models.job_offer import JobOffer
         from models.application import Application, ApplicationStatus
+        from models.candidate import Candidate
+        from services.shortlist_notification_service import notify_candidate_shortlisted
         
         db = SessionLocal()
         try:
@@ -281,6 +283,16 @@ class RecruitmentOrchestrator:
                 ).first()
                 if app:
                     app.status = ApplicationStatus.SHORTLISTED
+                    
+                    # Create shortlist notification
+                    if job:
+                        candidate = db.query(Candidate).filter(
+                            Candidate.candidate_id == app.candidate_id
+                        ).first()
+                        if candidate:
+                            notify_candidate_shortlisted(
+                                db, application=app, job=job, candidate=candidate
+                            )
             
             db.commit()
             

@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     EMBEDDING_DIM: int = 384
     SKILL_MATCH_THRESHOLD: float = 0.42
 
+    # Backend base URL (used to build audio media URLs served to the frontend)
+    BACKEND_URL: str = "http://localhost:8000"
+
     # 4. Interview Bot Config
     INTERVIEW_MAX_TURNS: int = 12
     INTERVIEW_MEDIA_DIR: str = "interview_media"
