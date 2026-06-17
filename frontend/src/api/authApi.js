@@ -104,7 +104,7 @@ export const respondToCandidateInterview = (interviewId, data) => API.post(`/int
 export const startInterview = (interviewId, data) => API.post(`/interviews/candidate/${interviewId}/start`, data, { timeout: 120000 })
 export const submitInterviewTurn = (interviewId, formData) => API.post(`/interviews/candidate/${interviewId}/turn`, formData, {
   headers: { "Content-Type": "multipart/form-data" }
-})00
+})
 export const endInterview = (interviewId) => API.post(`/interviews/candidate/${interviewId}/end`)
 
 /** Best-effort end when the tab closes (keepalive fetch). */
