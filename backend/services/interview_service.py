@@ -16,7 +16,6 @@ from models.interview import Interview, InterviewMessage, InterviewReport, Inter
 from models.job_offer import JobOffer
 from models.candidate import Candidate
 from models.user import User
-from models.cv_version import CVVersion
 from core.config import settings
 from services.stt_service import get_stt_service
 from services.tts_service import get_tts_service
@@ -1077,55 +1076,25 @@ Return a JSON object with this exact structure:
         text = "\n".join(p.strip() for p in parts if p and str(p).strip())
         return text[:3000] if text else "Description non disponible."
 
-    def _parse_candidate_cv(self, db: Session, candidate_id: str) -> Optional[dict]:
-        from services.ocr_service import ocr_service
-        from services.ner_service import ner_service
-
-        cv = (
-            db.query(CVVersion)
-            .filter(CVVersion.candidate_id == candidate_id, CVVersion.is_active == True)
-            .order_by(CVVersion.version_number.desc(), CVVersion.uploaded_at.desc())
-            .first()
-        )
-        if not cv or not cv.file_path or not os.path.exists(cv.file_path):
-            return None
-        try:
-            cv_text = ocr_service.extract_text(cv.file_path)
-            if not cv_text or len(cv_text.strip()) < 30:
-                return None
-            return ner_service.parse_cv(cv_text)
-        except Exception as exc:
-            logger.warning("CV parse failed for %s: %s", candidate_id, exc)
-            return None
-
     def _build_cv_summary(
         self, db: Session, candidate_id: str, candidate: Optional[Candidate]
     ) -> str:
-        parsed = self._parse_candidate_cv(db, candidate_id)
-        if not parsed:
-            skills = (candidate.skills if candidate else None) or ""
-            return f"CV not analyzed. Declared skills: {skills or 'not provided'}."
+        """Use profile skills from signup — avoid OCR on interview start (very slow)."""
+        skills = (candidate.skills if candidate else None) or ""
+        if not skills.strip():
+            return "CV profile not available. Declared skills: not provided."
+
+        user = None
+        if candidate:
+            user = db.query(User).filter(User.user_id == candidate.user_id).first()
 
         lines: List[str] = []
-        if parsed.get("name"):
-            lines.append(f"CV name: {parsed['name']}")
-        tech = parsed.get("skills", {}).get("technical", [])
-        soft = parsed.get("skills", {}).get("soft", [])
-        if tech:
-            lines.append(f"Technical skills: {', '.join(tech[:12])}")
-        if soft:
-            lines.append(f"Soft skills: {', '.join(soft[:8])}")
-        for exp in parsed.get("work_experience", [])[:4]:
-            role = exp.get("role", "")
-            company = exp.get("company", "")
-            if role or company:
-                lines.append(f"- {role} @ {company}".strip(" @"))
-        for edu in parsed.get("education", [])[:2]:
-            lines.append(
-                f"- Education: {edu.get('degree', '')} {edu.get('field', '')} ({edu.get('year', '')})".strip()
-            )
-        summary = "\n".join(lines)
-        return summary[:1500] if summary else "CV profile available but not detailed enough."
+        if user:
+            name = f"{user.first_name} {user.last_name}".strip()
+            if name:
+                lines.append(f"Candidate: {name}")
+        lines.append(f"Declared skills: {skills}")
+        return "\n".join(lines)[:1500]
 
     def _get_system_prompt(
         self,

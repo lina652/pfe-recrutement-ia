@@ -15,6 +15,7 @@ import {
 } from "../../api/authApi"
 import Toast from "../../components/Toast"
 import { canStartInterview, formatInterviewStartLabel } from "../../utils/interviewTime"
+import { loadPlayableAudioUrl } from "../../utils/mediaAudio"
 
 const PHASES = ["intro", "technical", "behavioral", "closing"]
 
@@ -29,6 +30,34 @@ function resolveRecordingMimeType() {
   if (MediaRecorder.isTypeSupported(RECORDING_MIME_PRIMARY)) return RECORDING_MIME_PRIMARY
   if (MediaRecorder.isTypeSupported(RECORDING_MIME_FALLBACK)) return RECORDING_MIME_FALLBACK
   return ""
+}
+
+function MessageAudio({ url }) {
+  const [src, setSrc] = useState(null)
+
+  useEffect(() => {
+    let blobUrl = null
+    let cancelled = false
+
+    loadPlayableAudioUrl(url)
+      .then((playable) => {
+        if (cancelled) {
+          URL.revokeObjectURL(playable)
+          return
+        }
+        blobUrl = playable
+        setSrc(playable)
+      })
+      .catch((err) => console.error("Message audio load failed", err))
+
+    return () => {
+      cancelled = true
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
+    }
+  }, [url])
+
+  if (!src) return null
+  return <audio controls className="w-full mt-2 text-xs" src={src} />
 }
 
 export default function InterviewRoom() {
@@ -65,6 +94,7 @@ export default function InterviewRoom() {
   const startLockRef = useRef(false)
   const transcriptEndRef = useRef(null)
   const botAudioRef = useRef(null)
+  const botBlobUrlRef = useRef(null)
   const sessionEndedRef = useRef(false)
   const liveSessionRef = useRef(false)
   const endRequestedRef = useRef(false)
@@ -154,6 +184,13 @@ export default function InterviewRoom() {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
+  const revokeBotBlob = () => {
+    if (botBlobUrlRef.current) {
+      URL.revokeObjectURL(botBlobUrlRef.current)
+      botBlobUrlRef.current = null
+    }
+  }
+
   const stopBotAudio = () => {
     const audio = botAudioRef.current
     if (audio) {
@@ -166,6 +203,7 @@ export default function InterviewRoom() {
       }
       botAudioRef.current = null
     }
+    revokeBotBlob()
     if (typeof document !== "undefined") {
       document.querySelectorAll("audio").forEach((el) => {
         el.pause()
@@ -200,26 +238,39 @@ export default function InterviewRoom() {
     }
   }
 
-  const playBotAudio = (url, onDone) => {
+  const playBotAudio = async (url, onDone) => {
     if (sessionEndedRef.current || !url) {
       onDone?.()
       return
     }
     stopBotAudio()
-    const audio = new Audio(url)
-    botAudioRef.current = audio
-    audio.onended = () => {
-      if (sessionEndedRef.current) return
-      botAudioRef.current = null
-      onDone?.()
-    }
-    audio.onerror = () => {
-      botAudioRef.current = null
+    try {
+      const blobUrl = await loadPlayableAudioUrl(url)
+      if (sessionEndedRef.current) {
+        URL.revokeObjectURL(blobUrl)
+        onDone?.()
+        return
+      }
+      botBlobUrlRef.current = blobUrl
+      const audio = new Audio(blobUrl)
+      botAudioRef.current = audio
+      audio.onended = () => {
+        if (sessionEndedRef.current) return
+        botAudioRef.current = null
+        revokeBotBlob()
+        onDone?.()
+      }
+      audio.onerror = () => {
+        botAudioRef.current = null
+        revokeBotBlob()
+        if (!sessionEndedRef.current) onDone?.()
+      }
+      await audio.play()
+    } catch (err) {
+      console.error("Bot audio playback failed", err)
+      revokeBotBlob()
       if (!sessionEndedRef.current) onDone?.()
     }
-    audio.play().catch(() => {
-      if (!sessionEndedRef.current) onDone?.()
-    })
   }
 
   const mapServerMessages = (list) =>
@@ -831,9 +882,7 @@ export default function InterviewRoom() {
                     <div key={msg.id} className={`p-3 rounded-xl ${msg.role === "bot" ? "page-glass-inset bg-blue-50/40" : "page-glass-inset"}`}>
                       <p className="text-xs font-bold text-gray-600 mb-1">{msg.role.toUpperCase()}</p>
                       <p className="text-sm text-gray-800">{msg.content}</p>
-                      {msg.audio_url && (
-                        <audio controls className="w-full mt-2 text-xs" src={msg.audio_url} />
-                      )}
+                      {msg.audio_url && <MessageAudio url={msg.audio_url} />}
                     </div>
                   ))}
                   <div ref={transcriptEndRef} />
