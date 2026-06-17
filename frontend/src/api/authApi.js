@@ -9,7 +9,7 @@ axios.defaults.headers.common["ngrok-skip-browser-warning"] = "69420"
 
 const API = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 60000,
 })
 
 API.interceptors.request.use((config) => {
@@ -101,10 +101,10 @@ export const clearCandidateNotifications = () => API.delete("/candidate/notifica
 export const getCandidateInterviews = () => API.get("/interviews/candidate/my-interviews")
 export const getCandidateInterviewDetail = (interviewId) => API.get(`/interviews/candidate/${interviewId}`)
 export const respondToCandidateInterview = (interviewId, data) => API.post(`/interviews/candidate/${interviewId}/respond`, data)
-export const startInterview = (interviewId, data) => API.post(`/interviews/candidate/${interviewId}/start`, data)
+export const startInterview = (interviewId, data) => API.post(`/interviews/candidate/${interviewId}/start`, data, { timeout: 120000 })
 export const submitInterviewTurn = (interviewId, formData) => API.post(`/interviews/candidate/${interviewId}/turn`, formData, {
   headers: { "Content-Type": "multipart/form-data" }
-})
+})00
 export const endInterview = (interviewId) => API.post(`/interviews/candidate/${interviewId}/end`)
 
 /** Best-effort end when the tab closes (keepalive fetch). */
@@ -117,7 +117,7 @@ export function endInterviewOnPageLeave(interviewId) {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     keepalive: true,
-  }).catch(() => {})
+  }).catch(() => { })
 }
 export const getInterviewScores = (interviewId) => API.get(`/interviews/candidate/${interviewId}/scores`)
 export const getInterviewTimeSlots = (interviewId) => API.get(`/interviews/candidate/${interviewId}/time-slots`)
@@ -149,7 +149,7 @@ export const ragChat = (data) => API.post("/rag/chat", data)
 export const getRAGJobs = () => API.get("/rag/jobs")
 
 // RAG Conversations — Recruiter
-export const createRAGConversation = (jobId, title) => 
+export const createRAGConversation = (jobId, title) =>
   API.post("/rag/conversations", { job_id: jobId, title })
 export const listRAGConversations = (jobId = null, favoritesOnly = false) =>
   API.get("/rag/conversations", { params: { job_id: jobId, favorites_only: favoritesOnly } })
@@ -160,9 +160,9 @@ export const updateRAGConversation = (conversationId, data) =>
 export const deleteRAGConversation = (conversationId) =>
   API.delete(`/rag/conversations/${conversationId}`)
 export const sendRAGMessage = (conversationId, question) =>
-  API.post(`/rag/conversations/${conversationId}/messages`, { 
+  API.post(`/rag/conversations/${conversationId}/messages`, {
     conversation_id: conversationId,
-    question 
+    question
   })
 
 export default API
